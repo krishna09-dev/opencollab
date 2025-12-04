@@ -1,0 +1,10 @@
+{
+  "name": "opencollab",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "pnpm --filter api dev"
+  }
+}
