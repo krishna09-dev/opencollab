@@ -1,10 +1,13 @@
-// apps/web/src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import OnboardingPage from "./pages/OnboardingPage";
-import HomePage from "./pages/HomePage";   // ⬅️ import this
+import HomePage from "./pages/HomePage";
+import IssueDetailPage from "./pages/IssueDetailPage";
+import ResourcesPage from "./features/resources/pages/ResourcesPage"; // ✅ ADD THIS
+import PrTrackingPage from "./features/prTracking/pages/PrTrackingPage";
+
 
 function App() {
   return (
@@ -23,7 +26,15 @@ function App() {
         {/* Home feed */}
         <Route path="/feed" element={<HomePage />} />
 
-        {/* Fallback: send unknown routes to login for now */}
+        {/* Issue Detail */}
+        <Route path="/issues/:id" element={<IssueDetailPage />} />
+
+        {/* ✅ Resources */}
+        <Route path="/resources" element={<ResourcesPage />} />
+
+        <Route path="/pr-tracking" element={<PrTrackingPage />} />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
