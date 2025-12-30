@@ -102,8 +102,13 @@ router.get("/github/callback", async (req: Request, res: Response) => {
         githubId: ghUser.id.toString(),
         login: ghUser.login,
         email: primaryEmail,
-        avatarUrl: ghUser.avatar_url
+        avatarUrl: ghUser.avatar_url,
+        githubAccessToken: accessToken,
       });
+    } else {
+      //  update token in case user re-logs in
+      user.githubAccessToken = accessToken;
+      await user.save();
     }
 
     // 2.5 Sign JWT

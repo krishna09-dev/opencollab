@@ -6,7 +6,7 @@ const JWT_SECRET: Secret = process.env.JWT_SECRET || "dev_secret";
 // Expiry in SECONDS (default = 7 days)
 const JWT_EXPIRES_IN: number = process.env.JWT_EXPIRES_IN
   ? Number(process.env.JWT_EXPIRES_IN)
-  : 60 * 60 * 24 * 7; // 7 days
+  : 60 * 60 * 24 * 7; // 7 days. simply make in days
 
 interface JwtPayloadInput {
   userId: string;

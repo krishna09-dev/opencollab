@@ -9,6 +9,7 @@ export interface IUser extends Document {
   experienceLevel?: "beginner" | "intermediate" | "advanced";
   areasOfInterest: string[];
   createdAt: Date;
+  githubAccessToken?: string;
   updatedAt: Date;
 }
 
@@ -18,6 +19,7 @@ const UserSchema = new Schema<IUser>(
     login: { type: String, required: true },
     email: { type: String },
     avatarUrl: { type: String },
+    githubAccessToken: { type: String },
     preferredLanguages: { type: [String], default: [] },
     experienceLevel: {
       type: String,
