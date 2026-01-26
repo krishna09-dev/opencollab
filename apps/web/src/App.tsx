@@ -1,10 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-import LoginPage from "./pages/LoginPage";
-import AuthCallbackPage from "./pages/AuthCallbackPage";
-import OnboardingPage from "./pages/OnboardingPage";
-import HomePage from "./pages/HomePage";
-import IssueDetailPage from "./pages/IssueDetailPage";
+import LoginPage from "./features/auth/pages/LoginPage";
+import AuthCallbackPage from "./features/auth/pages/AuthCallbackPage";
+import OnboardingPage from "./features/onboarding/pages/OnboardingPage";
+import HomePage from "./features/homeFeed/pages/HomePage";
+import IssueDetailPage from "./features/issueDetail/pages/IssueDetailPage";
 import ResourcesPage from "./features/resources/pages/ResourcesPage"; // ✅ ADD THIS
 import PrTrackingPage from "./features/prTracking/pages/PrTrackingPage";
 
