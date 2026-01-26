@@ -3,12 +3,17 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db";
+
 import authRoutes from "./routes/auth.routes";
 import userRoutes from "./routes/user.routes";
 import issuesRouter from "./routes/issues.routes";
 import notificationsRouter from "./routes/notifications.routes";
 import resourcesRoutes from "./routes/resources.routes";
 import prTrackingRoutes from "./routes/prTracking.routes";
+
+// Sprint 5
+import ingestionRoutes from "./routes/ingestion.routes";
+import { startIssueIngestionWorker } from "./workers/issueIngestion.worker";
 
 dotenv.config();
 
@@ -33,6 +38,10 @@ app.use("/api", notificationsRouter);
 app.use("/api/resources", resourcesRoutes);
 app.use("/api/pr-tracking", prTrackingRoutes);
 
+
+// Internal/dev trigger endpoint: POST /api/ingestion/run
+app.use("/api/ingestion", ingestionRoutes);
+
 // Health Check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -40,6 +49,9 @@ app.get("/health", (_req, res) => {
 
 // Start server
 connectDB().then(() => {
+  // Start ingestion worker after DB is ready
+  startIssueIngestionWorker();
+
   app.listen(PORT, () => {
     console.log(`🚀 API running at http://localhost:${PORT}`);
   });
