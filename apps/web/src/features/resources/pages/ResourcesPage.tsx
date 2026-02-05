@@ -1,31 +1,20 @@
-// apps/web/src/features/resources/pages/ResourcesPage.tsx
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Box, CircularProgress, Container, GlobalStyles, Snackbar, Stack, Typography } from "@mui/material";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Box, CircularProgress, GlobalStyles, Stack, Typography } from "@mui/material";
 
-import { api, authHeaders } from "../../../lib/api";
 import type { ResourceFilterState } from "../types";
-import { useResources } from "../hooks/useResources";
-import { seedResources } from "../api/resourcesApi";
-import { ResourceGrid } from "../components/ResourceGrid";
-import { ResourceFilters } from "../components/ResourceFilters";
+import type { SuggestResourcePayload } from "../components/SuggestResourceDialog";
+
 import ResourcesHeader from "../components/ResourcesHeader";
-import SuggestResourceDialog, { type SuggestResourcePayload } from "../components/SuggestResourceDialog";
+import { ResourceFilters } from "../components/ResourceFilters";
+import { ResourceGrid } from "../components/ResourceGrid";
+import SuggestResourceDialog from "../components/SuggestResourceDialog";
 
-type CurrentUser = {
-  id: string;
-  login: string;
-  email?: string;
-  avatarUrl?: string;
-};
+import { useResources } from "../hooks/useResources";
+import { useSeedResources } from "../hooks/useSeedResources";
+import { useDebounce } from "../hooks/useDebounce";
 
-type NotificationDto = {
-  id: string;
-  type: "ISSUE_AVAILABLE";
-  issueId: string;
-  issueTitle: string;
-  createdAt: string;
-  read: boolean;
-};
+import { suggestResource } from "../api/resourcesApi";
+import { fetchCurrentUser } from "../../issueDetail/api/issueDetailApi";
 
 const DEFAULT_FILTERS: ResourceFilterState = {
   q: "",
@@ -36,197 +25,166 @@ const DEFAULT_FILTERS: ResourceFilterState = {
 };
 
 export default function ResourcesPage() {
-  // ✅ dialog state
-  const [openSuggest, setOpenSuggest] = useState(false);
+  // ── user ──
+  const [currentUser, setCurrentUser] = useState<{ login?: string; avatarUrl?: string } | null>(null);
 
-  // filters + resources
-  const [filters, setFilters] = useState<ResourceFilterState>(DEFAULT_FILTERS);
-  const { loading, error, featured, items, total } = useResources(filters);
-
-  // header data
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [notifications, setNotifications] = useState<NotificationDto[]>([]);
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
-
-  // toast
-  const [toast, setToast] = useState<{ open: boolean; message: string; severity: "success" | "error" | "info" }>({
-    open: false,
-    message: "",
-    severity: "success"
-  });
-
-  const showToast = (message: string, severity: "success" | "error" | "info" = "success") =>
-    setToast({ open: true, message, severity });
-
-  const closeToast = () => setToast((p) => ({ ...p, open: false }));
-
-  // fetch current user + notifications
   useEffect(() => {
-    (async () => {
-      try {
-        const me = await api.get<CurrentUser>("/api/me", { headers: authHeaders() });
-        setCurrentUser(me.data);
-      } catch {
-        // ignore
-      }
-
-      try {
-        const res = await api.get<NotificationDto[]>("/api/notifications", { headers: authHeaders() });
-        setNotifications(res.data);
-      } catch {
-        // ignore
-      }
-    })();
+    fetchCurrentUser()
+      .then((u) => setCurrentUser({ login: u.login, avatarUrl: u.avatarUrl }))
+      .catch(() => setCurrentUser(null));
   }, []);
 
-  // seed resources
-  const handleSeed = async () => {
+  // ── filters ──
+  const [filters, setFilters] = useState<ResourceFilterState>(DEFAULT_FILTERS);
+  const debouncedFilters = useDebounce(filters, 300);
+
+  // ── data ──
+  const { loading, error, featured, items, total } = useResources(debouncedFilters);
+
+  // ── seed ──
+  const { seeding, seed } = useSeedResources();
+  const [seedMsg, setSeedMsg] = useState<string | null>(null);
+
+  const handleSeed = useCallback(async () => {
+    setSeedMsg(null);
+    const result = await seed();
+    if (result.ok) {
+      setSeedMsg(`Seeded ${result.inserted ?? 0} resources.`);
+      // refresh by toggling filters
+      setFilters((f) => ({ ...f }));
+    } else {
+      setSeedMsg(result.message ?? "Seed failed.");
+    }
+  }, [seed]);
+
+  // ── suggest dialog ──
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestMsg, setSuggestMsg] = useState<string | null>(null);
+
+  const handleSuggest = useCallback(async (payload: SuggestResourcePayload) => {
+    setSuggestMsg(null);
     try {
-        const data = await seedResources();
-        showToast(`${data.message} • inserted ${data.inserted}`, "success");
-        setFilters((p) => ({ ...p }));
+      const res = await suggestResource(payload);
+      setSuggestMsg(res.message);
+      setSuggestOpen(false);
+      // refresh
+      setFilters((f) => ({ ...f }));
     } catch (e: any) {
-        const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.detail ||
-        e?.message ||
-        "Failed to seed.";
-        showToast(msg, "error");
-        }
-    };
+      setSuggestMsg(e?.response?.data?.message || e?.message || "Failed to submit suggestion.");
+    }
+  }, []);
 
-  // ✅ handle suggestion submit (frontend only for now)
-  const handleSuggestSubmit = (payload: SuggestResourcePayload) => {
-    console.log("Suggest resource payload:", payload);
+  // ── reset ──
+  const handleReset = useCallback(() => {
+    setFilters(DEFAULT_FILTERS);
+    setSeedMsg(null);
+    setSuggestMsg(null);
+  }, []);
 
-    showToast("Suggestion submitted (frontend only).", "success");
-    setOpenSuggest(false);
-  };
+  // ── separate featured from regular ──
+  const regularItems = useMemo(() => {
+    const featuredIds = new Set(featured.map((f) => f.id));
+    return items.filter((i) => !featuredIds.has(i.id));
+  }, [items, featured]);
 
   return (
-    <Box sx={{ minHeight: "100vh", width: "100%", bgcolor: "#0b0b10", color: "#e5e7eb" }}>
-      <GlobalStyles styles={{ body: { backgroundColor: "#0b0b10" } }} />
+    <Box sx={{ minHeight: "100vh", bgcolor: "#050509", color: "#fff" }}>
+      <GlobalStyles styles={{ body: { backgroundColor: "#050509" } }} />
 
-      {/* Background blobs */}
-      <Box
-        sx={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          background: `
-            radial-gradient(900px 700px at 95% 2%, rgba(34,197,94,0.26), rgba(34,197,94,0) 60%),
-            radial-gradient(900px 700px at 15% 10%, rgba(255,255,255,0.06), rgba(255,255,255,0) 60%)
-          `
-        }}
-      />
-
-      {/* ✅ Reused header with callback */}
+      {/* ── Header ── */}
       <ResourcesHeader
         currentUser={currentUser}
-        unreadCount={unreadCount}
-        onSuggestClick={() => setOpenSuggest(true)} // ✅ IMPORTANT
+        onSuggestClick={() => setSuggestOpen(true)}
       />
 
-      <Container maxWidth={false} sx={{ maxWidth: 1440, py: 4, px: { xs: 2, md: 3, lg: 5 } }}>
-        <Typography
-          sx={{
-            color: "#fff",
-            fontSize: { xs: 34, md: 44 },
-            fontWeight: 900,
-            letterSpacing: -0.8,
-            lineHeight: 1.05
-          }}
-        >
-          Resources Library
-        </Typography>
-        <Typography sx={{ mt: 1, color: "#9ca3af", fontSize: 14 }}>
-          Search guides, docs, videos and cheat-sheets to help you contribute faster.
-        </Typography>
+      {/* ── Main content ── */}
+      <Box sx={{ maxWidth: 1280, mx: "auto", px: 3, py: 4 }}>
+        {/* ── Title ── */}
+        <Stack spacing={1} sx={{ mb: 2 }}>
+          <Typography sx={{ fontSize: 32, fontWeight: 800, letterSpacing: -0.5 }}>
+            Learning Resources
+          </Typography>
+          <Typography sx={{ fontSize: 15, color: "#9ca3af" }}>
+            Master the skills needed to contribute to world-class open source projects.
+          </Typography>
+        </Stack>
 
+        {/* ── Filters ── */}
         <ResourceFilters
           value={filters}
           onChange={setFilters}
-          onReset={() => setFilters(DEFAULT_FILTERS)}
+          onReset={handleReset}
           onSeed={handleSeed}
         />
 
-        <Box sx={{ mt: 3 }}>
-          {loading ? (
-            <Box sx={{ minHeight: "45vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <CircularProgress />
-            </Box>
-          ) : error ? (
-            <Alert
-              severity="error"
-              sx={{
-                bgcolor: "rgba(239,68,68,0.10)",
-                border: "1px solid rgba(239,68,68,0.25)",
-                color: "#fecaca"
-              }}
-            >
-              {error}
-            </Alert>
-          ) : (
-            <>
-              {/* FEATURED */}
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 3, mb: 1.5 }}>
-                <Typography
-                  sx={{
-                    fontSize: 11,
-                    fontWeight: 900,
-                    letterSpacing: 1.6,
-                    textTransform: "uppercase",
-                    color: "#9ca3af"
-                  }}
-                >
+        {/* ── Status messages ── */}
+        {(seedMsg || suggestMsg) && (
+          <Typography sx={{ mt: 2, fontSize: 14, color: "#19e66b", fontWeight: 600 }}>
+            {seedMsg || suggestMsg}
+          </Typography>
+        )}
+
+        {seeding && (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
+            <CircularProgress size={16} sx={{ color: "#19e66b" }} />
+            <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>Seeding resources...</Typography>
+          </Stack>
+        )}
+
+        {/* ── Loading ── */}
+        {loading && !seeding && (
+          <Stack alignItems="center" sx={{ py: 8 }}>
+            <CircularProgress size={32} sx={{ color: "#19e66b" }} />
+            <Typography sx={{ mt: 2, fontSize: 14, color: "#9ca3af" }}>Loading resources...</Typography>
+          </Stack>
+        )}
+
+        {/* ── Error ── */}
+        {error && (
+          <Typography sx={{ mt: 3, color: "#fca5a5", fontSize: 14, fontWeight: 600 }}>
+            {error}
+          </Typography>
+        )}
+
+        {/* ── Results ── */}
+        {!loading && !error && (
+          <Stack spacing={5} sx={{ mt: 4 }}>
+            {/* count */}
+            <Typography sx={{ fontSize: 13, color: "#6b7280" }}>
+              {total} resource{total !== 1 ? "s" : ""} found
+            </Typography>
+
+            {/* Featured */}
+            {featured.length > 0 && (
+              <Stack spacing={2}>
+                <Typography sx={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#a1a1aa", fontWeight: 700 }}>
                   Featured
                 </Typography>
-
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ color: "#9ca3af", fontSize: 12 }}>
-                  <Box sx={{ width: 8, height: 8, borderRadius: 999, bgcolor: "#19e66b" }} />
-                  <Typography sx={{ fontSize: 12, color: "#9ca3af" }}>High-quality picks for beginners</Typography>
-                </Stack>
+                <ResourceGrid items={featured} emptyText="" columns={{ xs: 1, md: 3 }} />
               </Stack>
+            )}
 
-              <ResourceGrid items={featured} emptyText="No featured resources match your filters." columns={{ xs: 1, md: 3 }} />
+            {/* All resources */}
+            <Stack spacing={2}>
+              <Typography sx={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#a1a1aa", fontWeight: 700 }}>
+                {featured.length > 0 ? "All Resources" : "Resources"}
+              </Typography>
+              <ResourceGrid
+                items={regularItems}
+                emptyText="No resources match your filters. Try adjusting or seed some samples."
+                columns={{ xs: 1, md: 3 }}
+              />
+            </Stack>
+          </Stack>
+        )}
+      </Box>
 
-              {/* ALL */}
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 4, mb: 1.5 }}>
-                <Typography
-                  sx={{
-                    fontSize: 11,
-                    fontWeight: 900,
-                    letterSpacing: 1.6,
-                    textTransform: "uppercase",
-                    color: "#9ca3af"
-                  }}
-                >
-                  All resources
-                </Typography>
-
-                <Typography sx={{ color: "#6b7280", fontSize: 12 }}>
-                  Showing {items.length} of {total}
-                </Typography>
-              </Stack>
-
-              <ResourceGrid items={items} emptyText="No resources match your filters." columns={{ xs: 1, md: 3 }} />
-            </>
-          )}
-        </Box>
-      </Container>
-
-      {/* ✅ Suggest Resource dialog mounted here */}
+      {/* ── Suggest dialog ── */}
       <SuggestResourceDialog
-        open={openSuggest}
-        onClose={() => setOpenSuggest(false)}
-        onSubmit={handleSuggestSubmit}
+        open={suggestOpen}
+        onClose={() => setSuggestOpen(false)}
+        onSubmit={handleSuggest}
       />
-
-      <Snackbar open={toast.open} autoHideDuration={3500} onClose={closeToast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
-        <Alert onClose={closeToast} severity={toast.severity} sx={{ width: "100%" }}>
-          {toast.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }

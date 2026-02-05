@@ -1,366 +1,733 @@
-// apps/web/src/features/prTracking/pages/PrTrackingPage.tsx
-import { useMemo, useState } from "react";
-import { Alert, Box, Button, Container, GlobalStyles, Paper, Stack, Typography } from "@mui/material";
-import ResourcesHeader from "../../resources/components/ResourcesHeader";
-import PrCard from "../components/PrCard";
-import PrTrackingFilters from "../components/PrFilters";
-import type { PrStatusFilter, PrTrackingItem } from "../types";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import MSym from "../../resources/components/MSym";
+import {
+  Avatar,
+  Badge,
+  Box,
+  Button,
+  CircularProgress,
+  Divider,
+  GlobalStyles,
+  IconButton,
+  InputBase,
+  Menu,
+  MenuItem,
+  Paper,
+  Stack,
+  Typography
+} from "@mui/material";
 
-// TEMP: dummy items (until backend ready)
-const DUMMY: PrTrackingItem[] = [
-  {
-    id: "1",
-    title: "Add PR tracking status chips to UI",
-    repoFullName: "opencollab/web",
-    issueNumber: 142,
-    shortSummary: "Adds PR list + detail tracking view.",
-    status: "PR_OPEN",
-    prNumber: 57,
-    messagesCount: 2,
-    lastMessagePreview: "Please add pagination…",
-    updatedAtLabel: "Updated 2m ago"
-  },
-  {
-    id: "2",
-    title: "Fix resources seed + add status/source fields",
-    repoFullName: "opencollab/api",
-    issueNumber: 133,
-    shortSummary: "Schema defaults + route updates.",
-    status: "MERGED",
-    prNumber: 41,
-    messagesCount: 5,
-    lastMessagePreview: "Merged ✅",
-    updatedAtLabel: "Updated 1d ago"
-  },
-  {
-    id: "3",
-    title: "Refactor auth middleware typings",
-    repoFullName: "opencollab/api",
-    issueNumber: 128,
-    shortSummary: "Fixes AuthRequest userId patterns.",
-    status: "CLOSED",
-    prNumber: 38,
-    messagesCount: 1,
-    lastMessagePreview: "Closing due to conflict",
-    updatedAtLabel: "Updated 4d ago"
-  }
+import MSym from "../../resources/components/MSym";
+import { fetchCurrentUser } from "../../issueDetail/api/issueDetailApi";
+import { usePrTracking } from "../hooks/usePrTracking";
+import type { PrDisplayStatus, PrFilterState, PrTrackingItem } from "../types";
+
+const PAGE_SIZE = 4;
+
+type SortValue = "newest" | "oldest";
+
+type CurrentUser = {
+  login?: string;
+  avatarUrl?: string;
+} | null;
+
+const STATUS_OPTIONS: Array<{ label: string; value: PrDisplayStatus }> = [
+  { label: "Open", value: "OPEN" },
+  { label: "In Review", value: "IN_REVIEW" },
+  { label: "Changes Requested", value: "CHANGES_REQUESTED" },
+  { label: "Merged", value: "MERGED" }
 ];
+
+function statusMeta(status: PrDisplayStatus) {
+  if (status === "IN_REVIEW") {
+    return {
+      label: "In Review",
+      fg: "#60a5fa",
+      bg: "rgba(96,165,250,0.10)",
+      border: "rgba(96,165,250,0.20)"
+    };
+  }
+
+  if (status === "CHANGES_REQUESTED") {
+    return {
+      label: "Changes Requested",
+      fg: "#fb923c",
+      bg: "rgba(251,146,60,0.10)",
+      border: "rgba(251,146,60,0.20)"
+    };
+  }
+
+  if (status === "MERGED") {
+    return {
+      label: "Merged",
+      fg: "#c084fc",
+      bg: "rgba(192,132,252,0.10)",
+      border: "rgba(192,132,252,0.20)"
+    };
+  }
+
+  return {
+    label: "Open",
+    fg: "#19e66b",
+    bg: "rgba(25,230,107,0.10)",
+    border: "rgba(25,230,107,0.20)"
+  };
+}
+
+function toDisplayStatus(item: PrTrackingItem): PrDisplayStatus {
+  if (item.displayStatus) return item.displayStatus;
+  if (item.status === "MERGED") return "MERGED";
+  return "OPEN";
+}
+
+function parseRelative(relative?: string): string {
+  if (!relative) return "";
+  const text = relative.trim();
+  if (!text) return "";
+  if (text.endsWith("ago")) return text;
+
+  if (text.endsWith("m")) return `${text.slice(0, -1)} minutes ago`;
+  if (text.endsWith("h")) return `${text.slice(0, -1)} hours ago`;
+  if (text.endsWith("d")) return `${text.slice(0, -1)} days ago`;
+  if (text.endsWith("w")) return `${text.slice(0, -1)} weeks ago`;
+
+  return text;
+}
 
 export default function PrTrackingPage() {
   const navigate = useNavigate();
 
-  // later: pass real currentUser/unreadCount from API like ResourcesPage
-  const currentUser = { login: "krishna09-dev", avatarUrl: "" };
-  const unreadCount = 1;
-
-  const [tab, setTab] = useState<"list" | "detail">("list");
-
-  const [filters, setFilters] = useState<{ q: string; status: PrStatusFilter; repo: string }>({
-    q: "",
-    status: "All",
-    repo: "All"
-  });
-
-  const repoOptions = useMemo(() => {
-    const s = new Set(DUMMY.map((x) => x.repoFullName));
-    return Array.from(s);
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
+  useEffect(() => {
+    fetchCurrentUser()
+      .then((u) => setCurrentUser({ login: u.login, avatarUrl: u.avatarUrl }))
+      .catch(() => setCurrentUser(null));
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = filters.q.trim().toLowerCase();
-    return DUMMY.filter((x) => {
-      const hitQ =
-        !q ||
-        x.title.toLowerCase().includes(q) ||
-        x.repoFullName.toLowerCase().includes(q) ||
-        String(x.issueNumber).includes(q);
+  const [filters, setFilters] = useState<PrFilterState>({ q: "", status: "All", repo: "All" });
+  const [sortBy, setSortBy] = useState<SortValue>("newest");
+  const [statusAnchor, setStatusAnchor] = useState<null | HTMLElement>(null);
+  const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
 
-      const hitStatus = filters.status === "All" ? true : x.status === filters.status;
-      const hitRepo = filters.repo === "All" ? true : x.repoFullName === filters.repo;
+  const { loading, error, data, repos } = usePrTracking(filters);
 
-      return hitQ && hitStatus && hitRepo;
-    });
-  }, [filters]);
+  const sortedItems = useMemo(() => {
+    if (sortBy === "newest") return data.items;
+    return [...data.items].reverse();
+  }, [data.items, sortBy]);
 
-  const summary = useMemo(() => {
-    const total = DUMMY.length;
-    const open = DUMMY.filter((x) => x.status === "PR_OPEN").length;
-    const merged = DUMMY.filter((x) => x.status === "MERGED").length;
-    const closed = DUMMY.filter((x) => x.status === "CLOSED").length;
-    return { total, open, merged, closed };
-  }, []);
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [filters.q, filters.status, filters.repo, sortBy, sortedItems.length]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * PAGE_SIZE;
+  const pagedItems = sortedItems.slice(start, start + PAGE_SIZE);
+
+  const showingFrom = sortedItems.length ? start + 1 : 0;
+  const showingTo = sortedItems.length ? Math.min(start + PAGE_SIZE, sortedItems.length) : 0;
+
+  const projects = repos.filter((r) => r !== "All").slice(0, 2);
+
+  const selectedStatusLabel =
+    filters.status === "All"
+      ? "All"
+      : STATUS_OPTIONS.find((x) => x.value === filters.status)?.label || String(filters.status);
+
+  const summaryCards = [
+    { label: "Total PRs", value: data.summary.total || 0, color: "#ffffff" },
+    { label: "Open", value: data.summary.open || 0, color: "#ffffff" },
+    { label: "In Review", value: data.summary.inReview || 0, color: "#60a5fa" },
+    { label: "Changes Requested", value: data.summary.changesRequested || 0, color: "#fb923c" },
+    { label: "Merged", value: data.summary.merged || 0, color: "#c084fc" }
+  ];
+
+  const clearFilters = () => {
+    setFilters({ q: "", status: "All", repo: "All" });
+    setSortBy("newest");
+  };
 
   return (
-    <Box sx={{ minHeight: "100vh", width: "100%", bgcolor: "#0b0b10", color: "#e5e7eb" }}>
-      <GlobalStyles styles={{ body: { backgroundColor: "#0b0b10" } }} />
+    <Box sx={{ minHeight: "100vh", bgcolor: "#050509", color: "#fff" }}>
+      <GlobalStyles styles={{ body: { backgroundColor: "#050509" } }} />
 
-      {/* background blobs */}
       <Box
         sx={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          background: `
-            radial-gradient(900px 700px at 95% 2%, rgba(34,197,94,0.26), rgba(34,197,94,0) 60%),
-            radial-gradient(900px 700px at 15% 10%, rgba(255,255,255,0.06), rgba(255,255,255,0) 60%)
-          `
+          height: 64,
+          borderBottom: "1px solid #27272a",
+          bgcolor: "rgba(5,5,9,0.8)",
+          backdropFilter: "blur(6px)",
+          px: 3,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
         }}
-      />
-
-      {/* header */}
-      <ResourcesHeader currentUser={currentUser} unreadCount={unreadCount} />
-
-      <Container maxWidth={false} sx={{ maxWidth: 1440, py: 4, px: { xs: 2, md: 3, lg: 5 } }}>
-        <Stack direction={{ xs: "column", md: "row" }} alignItems={{ md: "flex-end" }} justifyContent="space-between" spacing={2}>
-          <Box>
-            <Typography sx={{ color: "#fff", fontSize: { xs: 34, md: 44 }, fontWeight: 950, letterSpacing: -0.9, lineHeight: 1.05 }}>
-              PR Tracking
-            </Typography>
-            <Typography sx={{ mt: 1, color: "#9ca3af", fontSize: 14, fontWeight: 650 }}>
-              List of PRs you created, their status chips, and messages (comments + system events).
-            </Typography>
-
-            {/* tabs */}
-            <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-              <Button
-                onClick={() => setTab("list")}
-                sx={{
-                  height: 34,
-                  borderRadius: 999,
-                  px: 2,
-                  textTransform: "none",
-                  fontWeight: 900,
-                  bgcolor: tab === "list" ? "rgba(25,230,107,0.12)" : "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  color: tab === "list" ? "#19e66b" : "#9ca3af",
-                  "&:hover": { bgcolor: tab === "list" ? "rgba(25,230,107,0.16)" : "rgba(255,255,255,0.06)" }
-                }}
-              >
-                PR List
-              </Button>
-              <Button
-                onClick={() => setTab("detail")}
-                sx={{
-                  height: 34,
-                  borderRadius: 999,
-                  px: 2,
-                  textTransform: "none",
-                  fontWeight: 900,
-                  bgcolor: tab === "detail" ? "rgba(25,230,107,0.12)" : "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  color: tab === "detail" ? "#19e66b" : "#9ca3af",
-                  "&:hover": { bgcolor: tab === "detail" ? "rgba(25,230,107,0.16)" : "rgba(255,255,255,0.06)" }
-                }}
-              >
-                PR Detail
-              </Button>
-            </Stack>
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ cursor: "pointer" }} onClick={() => navigate("/feed")}>
+          <Box
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: "14px",
+              bgcolor: "rgba(25,230,107,0.2)",
+              display: "grid",
+              placeItems: "center"
+            }}
+          >
+            <MSym name="terminal" sx={{ color: "#19e66b", fontSize: 18 }} />
           </Box>
+          <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.4 }}>OpenCollab</Typography>
+        </Stack>
 
-          {/* actions */}
-          <Stack direction="row" spacing={1.25} sx={{ justifyContent: "flex-end" }}>
-            <Button
-              startIcon={<MSym name="sync" sx={{ fontSize: 18 }} />}
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <IconButton sx={{ color: "#a1a1aa" }}>
+            <Badge
+              variant="dot"
+              color="success"
               sx={{
-                height: 40,
-                borderRadius: 999,
-                px: 2.5,
-                textTransform: "none",
-                fontWeight: 900,
-                bgcolor: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.10)",
-                color: "#e5e7eb",
-                "&:hover": { bgcolor: "rgba(255,255,255,0.10)" }
+                "& .MuiBadge-badge": {
+                  bgcolor: "#19e66b",
+                  border: "2px solid #050509",
+                  right: 6,
+                  top: 8
+                }
               }}
             >
-              Manual Refresh
+              <MSym name="notifications" sx={{ fontSize: 19 }} />
+            </Badge>
+          </IconButton>
+          <IconButton sx={{ color: "#a1a1aa" }}>
+            <MSym name="settings" sx={{ fontSize: 19 }} />
+          </IconButton>
+          <Divider orientation="vertical" flexItem sx={{ borderColor: "#27272a", mx: 0.5 }} />
+          <Button
+            sx={{
+              textTransform: "none",
+              color: "#fff",
+              borderRadius: "14px",
+              px: 1,
+              minWidth: 0,
+              gap: 1,
+              "&:hover": { bgcolor: "rgba(255,255,255,0.06)" }
+            }}
+            startIcon={<Avatar src={currentUser?.avatarUrl} sx={{ width: 32, height: 32 }} />}
+            endIcon={<MSym name="keyboard_arrow_down" sx={{ color: "#a1a1aa", fontSize: 18 }} />}
+          >
+            <Typography sx={{ fontWeight: 500, fontSize: 14 }}>{currentUser?.login || "Alex Dev"}</Typography>
+          </Button>
+        </Stack>
+      </Box>
+
+      <Box sx={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
+        <Box
+          sx={{
+            width: 288,
+            borderRight: "1px solid #27272a",
+            px: 3,
+            py: 3,
+            display: { xs: "none", md: "block" }
+          }}
+        >
+          <Typography sx={{ color: "#a1a1aa", fontWeight: 600, fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase", px: 1 }}>
+            Contributions
+          </Typography>
+          <Stack spacing={0.5} sx={{ mt: 1 }}>
+            <Button
+              fullWidth
+              sx={{
+                justifyContent: "flex-start",
+                textTransform: "none",
+                borderRadius: "14px",
+                px: 1.5,
+                py: 1,
+                color: "#fff",
+                bgcolor: "#0b0f17",
+                border: "1px solid rgba(39,39,42,0.5)",
+                fontWeight: 500,
+                gap: 1,
+                "&:hover": { bgcolor: "#0f1420" }
+              }}
+            >
+              <MSym name="fork_right" sx={{ fontSize: 18, color: "#19e66b" }} />
+              My Pull Requests
             </Button>
-
             <Button
-              startIcon={<MSym name="bolt" sx={{ fontSize: 18 }} />}
+              fullWidth
+              onClick={() => navigate("/feed")}
               sx={{
-                height: 40,
-                borderRadius: 999,
-                px: 2.5,
+                justifyContent: "flex-start",
                 textTransform: "none",
-                fontWeight: 950,
-                bgcolor: "#19e66b",
-                color: "#001b0a",
-                "&:hover": { bgcolor: "#22c55e" }
+                borderRadius: "14px",
+                px: 1.5,
+                py: 1,
+                color: "#a1a1aa",
+                fontWeight: 500,
+                gap: 1
               }}
             >
-              Run Dummy Worker
+              <MSym name="article" sx={{ fontSize: 17 }} />
+              Active Issues
+            </Button>
+            <Button
+              fullWidth
+              onClick={() => navigate("/resources")}
+              sx={{
+                justifyContent: "flex-start",
+                textTransform: "none",
+                borderRadius: "14px",
+                px: 1.5,
+                py: 1,
+                color: "#a1a1aa",
+                fontWeight: 500,
+                gap: 1
+              }}
+            >
+              <MSym name="school" sx={{ fontSize: 17 }} />
+              Learning Resources
             </Button>
           </Stack>
-        </Stack>
 
-        {/* main grid */}
-        <Stack direction={{ xs: "column", lg: "row" }} spacing={2.5} sx={{ mt: 3 }}>
-          {/* LEFT: list card */}
-          <Paper
-            elevation={0}
-            sx={{
-              flex: 1,
-              borderRadius: 4,
-              border: "1px solid rgba(255,255,255,0.10)",
-              bgcolor: "rgba(255,255,255,0.04)",
-              overflow: "hidden",
-              boxShadow: "0 25px 70px rgba(0,0,0,0.35)"
-            }}
-          >
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{
-                px: 2,
-                py: 1.5,
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                bgcolor: "rgba(17,17,26,0.25)"
-              }}
-            >
-              <Typography sx={{ fontWeight: 950, color: "#fff" }}>All PRs</Typography>
-              <Typography sx={{ fontSize: 12, fontWeight: 800, color: "#9ca3af" }}>Click an item to open detail</Typography>
-            </Stack>
-
-            <Box sx={{ p: 2 }}>
-              {/* ✅ Proper rounded filter bar (like reference) */}
-              <PrTrackingFilters
-                value={filters}
-                repoOptions={repoOptions}
-                onChange={setFilters}
-                onReset={() => setFilters({ q: "", status: "All", repo: "All" })}
-              />
-
-              <Typography sx={{ mt: 2, color: "#6b7280", fontSize: 12, fontWeight: 800 }}>
-                Showing {filtered.length} of {DUMMY.length}
-              </Typography>
-
-              <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-                {filtered.length === 0 ? (
-                  <Alert
-                    severity="info"
-                    sx={{
-                      bgcolor: "rgba(59,130,246,0.10)",
-                      border: "1px solid rgba(59,130,246,0.25)",
-                      color: "#bfdbfe"
-                    }}
-                  >
-                    No PRs match your filters.
-                  </Alert>
-                ) : (
-                  filtered.map((item) => (
-                    <PrCard key={item.id} item={item} onOpen={() => setTab("detail")} />
-                  ))
-                )}
-              </Stack>
-            </Box>
-          </Paper>
-
-          {/* RIGHT: summary */}
-          <Paper
-            elevation={0}
-            sx={{
-              width: { xs: "100%", lg: 460 },
-              borderRadius: 4,
-              border: "1px solid rgba(255,255,255,0.10)",
-              bgcolor: "rgba(255,255,255,0.04)",
-              overflow: "hidden",
-              boxShadow: "0 25px 70px rgba(0,0,0,0.35)"
-            }}
-          >
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{
-                px: 2,
-                py: 1.5,
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                bgcolor: "rgba(17,17,26,0.25)"
-              }}
-            >
-              <Typography sx={{ fontWeight: 950, color: "#fff" }}>Summary</Typography>
-              <Typography sx={{ fontSize: 12, fontWeight: 800, color: "#9ca3af" }}>Dummy stats</Typography>
-            </Stack>
-
-            <Box sx={{ p: 2 }}>
-              <Stack direction="row" spacing={1.25} sx={{ flexWrap: "wrap" }}>
-                {[
-                  { n: summary.total, l: "Total PRs" },
-                  { n: summary.open, l: "PR_OPEN" },
-                  { n: summary.merged, l: "MERGED" },
-                  { n: summary.closed, l: "CLOSED" }
-                ].map((x) => (
-                  <Box
-                    key={x.l}
-                    sx={{
-                      flex: "1 1 200px",
-                      p: 2,
-                      borderRadius: 3,
-                      border: "1px solid rgba(255,255,255,0.10)",
-                      bgcolor: "rgba(255,255,255,0.04)"
-                    }}
-                  >
-                    <Typography sx={{ fontSize: 22, fontWeight: 950, color: "#fff", letterSpacing: -0.6 }}>
-                      {x.n}
-                    </Typography>
-                    <Typography sx={{ mt: 0.5, fontSize: 12, fontWeight: 800, color: "#9ca3af" }}>
-                      {x.l}
-                    </Typography>
-                  </Box>
-                ))}
-              </Stack>
-
-              <Box
+          <Typography sx={{ color: "#a1a1aa", fontWeight: 600, fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase", px: 1, mt: 4 }}>
+            Projects
+          </Typography>
+          <Stack spacing={0.5} sx={{ mt: 1 }}>
+            {(projects.length ? projects : ["facebook/react", "vercel/next.js"]).map((project) => (
+              <Button
+                key={project}
+                fullWidth
                 sx={{
-                  mt: 2,
-                  p: 2,
-                  borderRadius: 3,
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  bgcolor: "rgba(255,255,255,0.04)"
+                  justifyContent: "flex-start",
+                  textTransform: "none",
+                  borderRadius: "14px",
+                  px: 1.5,
+                  py: 1,
+                  color: "#a1a1aa",
+                  fontWeight: 500,
+                  gap: 1
                 }}
               >
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography sx={{ fontWeight: 950, color: "#fff" }}>Status rules</Typography>
-                  <Typography sx={{ fontSize: 12, fontWeight: 800, color: "#9ca3af" }}>Sprint 4</Typography>
-                </Stack>
+                <MSym name="folder" sx={{ fontSize: 17 }} />
+                {project}
+              </Button>
+            ))}
+          </Stack>
+        </Box>
 
-                <Stack spacing={1} sx={{ mt: 1.5, color: "#cbd5e1", fontWeight: 750, fontSize: 13 }}>
-                  <Box>• PR_OPEN → PR detected</Box>
-                  <Box>• MERGED → PR merged</Box>
-                  <Box>• CLOSED → PR closed</Box>
-                  <Box>• ACCEPTED → No PR yet</Box>
-                </Stack>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ maxWidth: 1152, mx: "auto", px: 3, py: 5 }}>
+            <Typography sx={{ fontSize: 42, lineHeight: "48px", fontWeight: 700, letterSpacing: -0.8 }}>
+              My Pull Requests
+            </Typography>
+            <Typography sx={{ color: "#a1a1aa", mt: 1, fontSize: 22 / 1.375 }}>
+              Track your contributions and monitor review progress.
+            </Typography>
 
-                <Typography sx={{ mt: 1.5, fontSize: 12, color: "#6b7280", fontWeight: 800 }}>
-                  Worker sync (dummy): every 10–15 minutes. Manual refresh uses user token.
+            <Stack direction="row" spacing={2} sx={{ mt: 3, flexWrap: "wrap", rowGap: 1.5 }}>
+              {summaryCards.map((card) => (
+                <Paper
+                  key={card.label}
+                  elevation={0}
+                  sx={{
+                    bgcolor: "#0b0f17",
+                    border: "1px solid #27272a",
+                    borderRadius: "16px",
+                    px: 2.5,
+                    py: 1.5,
+                    minWidth: 120
+                  }}
+                >
+                  <Typography sx={{ color: "#a1a1aa", fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    {card.label}
+                  </Typography>
+                  <Typography sx={{ color: card.color, fontSize: 34 / 1.4, fontWeight: 700, lineHeight: "32px", mt: 0.5 }}>
+                    {card.value}
+                  </Typography>
+                </Paper>
+              ))}
+            </Stack>
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ mt: 3, alignItems: "center" }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  width: "100%",
+                  borderRadius: "999px",
+                  border: "1px solid #27272a",
+                  bgcolor: "#0b0f17",
+                  px: 1.5,
+                  py: 1.1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1
+                }}
+              >
+                <MSym name="search" sx={{ color: "#a1a1aa", fontSize: 18 }} />
+                <InputBase
+                  value={filters.q}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
+                  placeholder="Search pull requests..."
+                  sx={{ color: "#fff", fontSize: 14, width: "100%" }}
+                />
+              </Paper>
+
+              <Stack direction="row" spacing={1}>
+                <Button
+                  onClick={(e) => setStatusAnchor(e.currentTarget)}
+                  sx={{
+                    height: 46,
+                    borderRadius: "16px",
+                    textTransform: "none",
+                    px: 2,
+                    color: "#fff",
+                    border: "1px solid #27272a",
+                    bgcolor: "#0b0f17",
+                    gap: 0.75
+                  }}
+                  startIcon={<MSym name="filter_list" sx={{ fontSize: 18 }} />}
+                  endIcon={<MSym name="keyboard_arrow_down" sx={{ fontSize: 16 }} />}
+                >
+                  Status
+                </Button>
+                <Button
+                  onClick={(e) => setSortAnchor(e.currentTarget)}
+                  sx={{
+                    height: 46,
+                    borderRadius: "16px",
+                    textTransform: "none",
+                    px: 2,
+                    color: "#fff",
+                    border: "1px solid #27272a",
+                    bgcolor: "#0b0f17",
+                    gap: 0.75
+                  }}
+                  startIcon={<MSym name="sort" sx={{ fontSize: 18 }} />}
+                  endIcon={<MSym name="keyboard_arrow_down" sx={{ fontSize: 16 }} />}
+                >
+                  Sort
+                </Button>
+              </Stack>
+            </Stack>
+
+            <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: "center" }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  borderRadius: "999px",
+                  border: "1px solid rgba(25,230,107,0.20)",
+                  bgcolor: "rgba(25,230,107,0.10)",
+                  px: 1.5,
+                  py: 0.5,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75
+                }}
+              >
+                <Typography sx={{ color: "#19e66b", fontSize: 12, fontWeight: 500 }}>
+                  Status: {selectedStatusLabel}
                 </Typography>
-              </Box>
+                <IconButton size="small" sx={{ p: 0, color: "#19e66b" }} onClick={() => setFilters((prev) => ({ ...prev, status: "All" }))}>
+                  <MSym name="close" sx={{ fontSize: 14 }} />
+                </IconButton>
+              </Paper>
 
               <Button
-                onClick={() => navigate("/resources")}
+                onClick={clearFilters}
                 sx={{
-                  mt: 2,
-                  height: 40,
-                  borderRadius: 999,
-                  px: 2.5,
+                  borderRadius: "999px",
                   textTransform: "none",
-                  fontWeight: 950,
-                  bgcolor: "rgba(25,230,107,0.12)",
-                  border: "1px solid rgba(25,230,107,0.25)",
-                  color: "#19e66b",
-                  "&:hover": { bgcolor: "rgba(25,230,107,0.16)" }
+                  color: "#a1a1aa",
+                  border: "1px solid #27272a",
+                  bgcolor: "#0b0f17",
+                  px: 1.5,
+                  py: 0.6,
+                  fontSize: 12,
+                  minWidth: 0
                 }}
               >
-                Go to Resources
+                Clear all filters
               </Button>
-            </Box>
-          </Paper>
-        </Stack>
-      </Container>
+            </Stack>
+
+            <Stack spacing={2} sx={{ mt: 2 }}>
+              {loading && (
+                <Stack sx={{ py: 8 }} alignItems="center">
+                  <CircularProgress size={28} sx={{ color: "#19e66b" }} />
+                  <Typography sx={{ color: "#a1a1aa", mt: 1.5, fontSize: 14 }}>Loading pull requests...</Typography>
+                </Stack>
+              )}
+
+              {!loading && error && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    bgcolor: "rgba(239,68,68,0.12)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    borderRadius: "14px",
+                    px: 2,
+                    py: 1.5
+                  }}
+                >
+                  <Typography sx={{ color: "#fecaca", fontSize: 14, fontWeight: 500 }}>{error}</Typography>
+                </Paper>
+              )}
+
+              {!loading && !error && pagedItems.map((item) => {
+                const displayStatus = toDisplayStatus(item);
+                const status = statusMeta(displayStatus);
+
+                return (
+                  <Paper
+                    key={item.id}
+                    elevation={0}
+                    sx={{
+                      bgcolor: "#0b0f17",
+                      border: "1px solid #27272a",
+                      borderRadius: "20px",
+                      px: 3,
+                      py: 3,
+                      display: "flex",
+                      gap: 3,
+                      alignItems: "center"
+                    }}
+                  >
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 0.5 }}>
+                        <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                          {item.repoFullName}
+                        </Typography>
+                        {item.prNumber ? (
+                          <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                            #{item.prNumber}
+                          </Typography>
+                        ) : null}
+                        <Typography sx={{ fontSize: 12, color: "#a1a1aa" }}>• {parseRelative(item.updatedAtLabel) || "Recently"}</Typography>
+                        <Paper
+                          elevation={0}
+                          sx={{
+                            borderRadius: "8px",
+                            px: 1,
+                            py: 0.35,
+                            bgcolor: status.bg,
+                            border: `1px solid ${status.border}`
+                          }}
+                        >
+                          <Typography sx={{ color: status.fg, fontSize: 10, textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>
+                            {status.label}
+                          </Typography>
+                        </Paper>
+                      </Stack>
+
+                      <Typography sx={{ mt: 1, fontSize: 31 / 1.55, fontWeight: 700, color: "#fff", lineHeight: "28px" }}>
+                        {item.title}
+                      </Typography>
+
+                      <Typography sx={{ mt: 1, color: "#a1a1aa", fontSize: 14, lineHeight: "22px" }}>
+                        {item.shortSummary || "No summary available for this pull request yet."}
+                      </Typography>
+
+                      <Stack direction="row" spacing={2} sx={{ mt: 1.5, color: "#a1a1aa", alignItems: "center", flexWrap: "wrap", rowGap: 0.5 }}>
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <MSym name="link" sx={{ fontSize: 14 }} />
+                          <Typography sx={{ fontSize: 11, fontWeight: 500 }}>Fixes #{item.issueNumber}</Typography>
+                        </Stack>
+
+                        {item.primaryLanguage ? (
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <MSym name="code" sx={{ fontSize: 14 }} />
+                            <Typography sx={{ fontSize: 11, fontWeight: 500 }}>{item.primaryLanguage}</Typography>
+                          </Stack>
+                        ) : null}
+
+                        <Stack direction="row" spacing={1.2} alignItems="center">
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <MSym name="chat_bubble_outline" sx={{ fontSize: 14 }} />
+                            <Typography sx={{ fontSize: 11, fontWeight: 500 }}>{item.commentsCount ?? 0}</Typography>
+                          </Stack>
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <MSym name="forum" sx={{ fontSize: 14 }} />
+                            <Typography sx={{ fontSize: 11, fontWeight: 500 }}>{item.reviewCommentsCount ?? 0}</Typography>
+                          </Stack>
+                        </Stack>
+                      </Stack>
+                    </Box>
+
+                    <Button
+                      onClick={() => {
+                        if (item.prUrl) {
+                          window.open(item.prUrl, "_blank", "noopener,noreferrer");
+                        }
+                      }}
+                      disabled={!item.prUrl}
+                      sx={{
+                        height: 40,
+                        borderRadius: "14px",
+                        px: 3,
+                        textTransform: "none",
+                        fontWeight: 700,
+                        bgcolor: "#19e66b",
+                        color: "#000",
+                        whiteSpace: "nowrap",
+                        boxShadow: "0 0 10px rgba(25,230,107,0.20)",
+                        "&:hover": { bgcolor: "#22c55e" },
+                        "&.Mui-disabled": {
+                          bgcolor: "rgba(25,230,107,0.25)",
+                          color: "rgba(0,0,0,0.45)"
+                        }
+                      }}
+                    >
+                      View Details
+                    </Button>
+                  </Paper>
+                );
+              })}
+            </Stack>
+
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", md: "center" }}
+              sx={{ mt: 3, pt: 3, borderTop: "1px solid #27272a" }}
+              spacing={1.5}
+            >
+              <Typography sx={{ color: "#a1a1aa", fontSize: 14 }}>
+                Showing <Box component="span" sx={{ color: "#fff", fontWeight: 500 }}>{showingFrom}</Box> to{" "}
+                <Box component="span" sx={{ color: "#fff", fontWeight: 500 }}>{showingTo}</Box> of{" "}
+                <Box component="span" sx={{ color: "#fff", fontWeight: 500 }}>{sortedItems.length}</Box> PRs
+              </Typography>
+
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Button
+                  disabled={safePage === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  sx={{
+                    textTransform: "none",
+                    borderRadius: "14px",
+                    px: 2,
+                    color: "#a1a1aa",
+                    border: "1px solid #27272a",
+                    bgcolor: "#0b0f17"
+                  }}
+                >
+                  Previous
+                </Button>
+
+                {Array.from({ length: Math.min(totalPages, 3) }, (_, index) => index + 1).map((num) => (
+                  <Button
+                    key={num}
+                    onClick={() => setPage(num)}
+                    sx={{
+                      minWidth: 36,
+                      width: 36,
+                      height: 36,
+                      borderRadius: "14px",
+                      p: 0,
+                      textTransform: "none",
+                      bgcolor: safePage === num ? "#19e66b" : "transparent",
+                      color: safePage === num ? "#000" : "#a1a1aa",
+                      fontWeight: safePage === num ? 700 : 400
+                    }}
+                  >
+                    {num}
+                  </Button>
+                ))}
+
+                <Button
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  sx={{
+                    textTransform: "none",
+                    borderRadius: "14px",
+                    px: 2,
+                    color: "#a1a1aa",
+                    border: "1px solid #27272a",
+                    bgcolor: "#0b0f17"
+                  }}
+                >
+                  Next
+                </Button>
+              </Stack>
+            </Stack>
+
+            <Typography sx={{ mt: 4, color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
+              © 2023 OpenCollab Inc. · Terms · Privacy
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+
+      <Menu
+        anchorEl={statusAnchor}
+        open={Boolean(statusAnchor)}
+        onClose={() => setStatusAnchor(null)}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            bgcolor: "#0b0f17",
+            border: "1px solid #27272a",
+            color: "#fff",
+            minWidth: 190
+          }
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            setFilters((prev) => ({ ...prev, status: "All" }));
+            setStatusAnchor(null);
+          }}
+          selected={filters.status === "All"}
+        >
+          All
+        </MenuItem>
+        {STATUS_OPTIONS.map((option) => (
+          <MenuItem
+            key={option.value}
+            onClick={() => {
+              setFilters((prev) => ({ ...prev, status: option.value }));
+              setStatusAnchor(null);
+            }}
+            selected={filters.status === option.value}
+          >
+            {option.label}
+          </MenuItem>
+        ))}
+      </Menu>
+
+      <Menu
+        anchorEl={sortAnchor}
+        open={Boolean(sortAnchor)}
+        onClose={() => setSortAnchor(null)}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            bgcolor: "#0b0f17",
+            border: "1px solid #27272a",
+            color: "#fff",
+            minWidth: 190
+          }
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            setSortBy("newest");
+            setSortAnchor(null);
+          }}
+          selected={sortBy === "newest"}
+        >
+          Most Recent
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setSortBy("oldest");
+            setSortAnchor(null);
+          }}
+          selected={sortBy === "oldest"}
+        >
+          Oldest
+        </MenuItem>
+      </Menu>
     </Box>
   );
 }

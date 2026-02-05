@@ -195,3 +195,41 @@ export async function seedResources(): Promise<{ message: string; inserted: numb
   );
   return res.data;
 }
+
+export type SuggestResourceInput = {
+  title: string;
+  url: string;
+  description: string;
+  category: ResourceCategory;
+  difficulty: ResourceDifficulty;
+  type: ResourceType;
+  language: string | null;
+  tags: string[];
+};
+
+export async function suggestResource(input: SuggestResourceInput): Promise<{ message: string; id: string }> {
+  const topic = categoryToTopic[input.category];
+  const topics = topic ? [topic] : [];
+
+  // Map UI types "guide"/"cheatsheet" to backend "tool"
+  let backendType: string = input.type;
+  if (input.type === "guide" || input.type === "cheatsheet") {
+    backendType = "tool";
+  }
+
+  const res = await api.post<{ message: string; id: string }>(
+    "/api/resources/suggest",
+    {
+      title: input.title,
+      url: input.url,
+      description: input.description,
+      type: backendType,
+      difficulty: input.difficulty,
+      tags: input.tags,
+      topics,
+      language: input.language
+    },
+    { headers: authHeaders() }
+  );
+  return res.data;
+}

@@ -84,7 +84,7 @@ export default function PrMessagesPanel({
                   width: 40,
                   height: 40,
                   background: m.author === "maintainer"
-                    ? "linear-gradient(135deg, # hookup, #60a5fa)" // safe default? (but invalid)
+                    ? "linear-gradient(135deg, #f97316, #60a5fa)"
                     : "linear-gradient(135deg, #a855f7, #3b82f6)"
                 }}
               >
