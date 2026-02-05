@@ -6,6 +6,42 @@ import { getGithubTokenForUser } from "../services/userToken.service";
 
 const router = Router();
 
+type UiPrStatus = "OPEN" | "IN_REVIEW" | "CHANGES_REQUESTED" | "MERGED";
+
+function toUiStatus(item: any): UiPrStatus {
+  if (item?.status === "MERGED") return "MERGED";
+  if (item?.status === "PR_OPEN") {
+    if (item?.reviewState === "CHANGES_REQUESTED") return "CHANGES_REQUESTED";
+    if ((item?.requestedReviewersCount ?? 0) > 0 || item?.reviewState === "APPROVED" || item?.reviewState === "COMMENTED") {
+      return "IN_REVIEW";
+    }
+  }
+  return "OPEN";
+}
+
+function buildSummary(items: any[]) {
+  const uiCounts = { open: 0, inReview: 0, changesRequested: 0, merged: 0 };
+  for (const item of items) {
+    const ui = toUiStatus(item);
+    if (ui === "OPEN") uiCounts.open++;
+    if (ui === "IN_REVIEW") uiCounts.inReview++;
+    if (ui === "CHANGES_REQUESTED") uiCounts.changesRequested++;
+    if (ui === "MERGED") uiCounts.merged++;
+  }
+
+  return {
+    total: items.length,
+    open: uiCounts.open,
+    inReview: uiCounts.inReview,
+    changesRequested: uiCounts.changesRequested,
+    merged: uiCounts.merged,
+
+    // backward-compatible fields for existing clients
+    accepted: items.filter((x) => x.status === "ACCEPTED").length,
+    closed: items.filter((x) => x.status === "CLOSED").length
+  };
+}
+
 /**
  * GET /api/pr-tracking
  * List all tracked PRs for current user + summary counts
@@ -18,15 +54,12 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
       .sort({ updatedAt: -1 })
       .lean();
 
-    const summary = {
-      total: items.length,
-      accepted: items.filter((x) => x.status === "ACCEPTED").length,
-      open: items.filter((x) => x.status === "PR_OPEN").length,
-      merged: items.filter((x) => x.status === "MERGED").length,
-      closed: items.filter((x) => x.status === "CLOSED").length
-    };
+    const mapped = items.map((item) => ({
+      ...item,
+      displayStatus: toUiStatus(item)
+    }));
 
-    return res.json({ summary, items });
+    return res.json({ summary: buildSummary(mapped), items: mapped });
   } catch (err) {
     console.error("GET /api/pr-tracking error:", err);
     return res.status(500).json({ message: "Failed to load PR tracking list" });
@@ -142,10 +175,17 @@ router.post("/refresh", authRequired, async (req: AuthRequest, res: Response) =>
           $set: {
             prNumber: best ? best.number : null,
             prTitle: best ? best.title : null,
+            prBody: best ? best.body : null,
             prUrl: best ? best.html_url : null,
             prState: best ? best.state : null,
             mergedAt: best?.merged_at ? new Date(best.merged_at) : null,
             closedAt: best?.closed_at ? new Date(best.closed_at) : null,
+            prUpdatedAt: best?.updated_at ? new Date(best.updated_at) : null,
+            primaryLanguage: best?.language ?? null,
+            requestedReviewersCount: best?.requested_reviewers_count ?? 0,
+            reviewState: best?.review_state ?? null,
+            commentsCount: best?.comments ?? 0,
+            reviewCommentsCount: best?.review_comments ?? 0,
             status,
             lastSyncAt: new Date(),
             syncSource: "manual"
