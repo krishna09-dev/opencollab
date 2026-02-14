@@ -1,6 +1,7 @@
 // apps/web/src/features/prTracking/api/prTrackingApi.ts
 import { api, authHeaders } from "../../../lib/api";
 import type {
+  PrDetailResponse,
   PrDisplayStatus,
   PrFilterState,
   PrListResponse,
@@ -188,6 +189,92 @@ const DUMMY_MESSAGES: Record<string, PrMessage[]> = {
   ]
 };
 
+const DUMMY_DETAIL: Record<string, PrDetailResponse> = {
+  "1": {
+    id: "1",
+    title: "Refactor Authentication Flow",
+    number: 42,
+    owner: "opencollab",
+    repo: "core-engine",
+    status: "CHANGES_REQUESTED",
+    sourceBranch: "auth-refactor",
+    targetBranch: "main",
+    tags: ["Enhancement", "Auth"],
+    overview: {
+      author: "alex_dev",
+      commentedAtLabel: "3 hours ago",
+      intro:
+        "This PR replaces the legacy session-based authentication with a more robust JWT-based flow. It includes the following changes:",
+      changes: [
+        "Implemented AuthService using jsonwebtoken.",
+        "Added middleware for token verification on protected routes.",
+        "Updated client-side state management to handle token persistence.",
+        "Refactored /login and /register endpoints."
+      ],
+      note: "This requires a new environment variable JWT_SECRET to be set in production.",
+      linkedIssue: {
+        number: 123,
+        title: "Implement Secure Auth Flow",
+        openedBy: "systems_lead"
+      }
+    },
+    timeline: [
+      { id: "opened", type: "opened", actor: "alex_dev", text: "opened this pull request", atLabel: "3 hours ago" },
+      {
+        id: "commits",
+        type: "commits",
+        commits: [
+          { sha: "a7b2c4e", message: "feat: implement jwt generation logic", atLabel: "2 hours ago" },
+          { sha: "8d9f1e2", message: "fix: middleware error handling", atLabel: "1 hour ago" }
+        ]
+      },
+      { id: "review", type: "reviewRequested", actor: "alex_dev", reviewers: ["mike_ux", "sarah_tech"] },
+      {
+        id: "changes",
+        type: "changesRequested",
+        actor: "mike_ux",
+        atLabel: "45 mins ago",
+        summary:
+          "The token expiration is currently set to 30 days. We should reduce this to 1 hour and implement refresh tokens for better security.",
+        diffOld: "expiresIn: '30d'",
+        diffNew: "expiresIn: '1h'"
+      },
+      {
+        id: "maintainer",
+        type: "maintainerFeedback",
+        title: "Maintainer Feedback",
+        body:
+          "Great overall implementation. Please address Mike's concern regarding the expiration time. Once that's done and CI checks pass, I'm ready to merge."
+      },
+      {
+        id: "restriction",
+        type: "restriction",
+        body: "Conversation is restricted to maintainers or authorized reviewers"
+      }
+    ],
+    sidebar: {
+      reviewers: [
+        { id: "sarah", name: "sarah_tech", status: "approved" },
+        { id: "mike", name: "mike_ux", status: "changes_requested" },
+        { id: "john", name: "john_dev", status: "pending" }
+      ],
+      checks: [
+        { id: "vercel", name: "Vercel Deployment", status: "success", durationLabel: "2m", progress: 100 },
+        { id: "unit", name: "Unit Tests (154/154)", status: "success", durationLabel: "4m", progress: 100 },
+        { id: "e2e", name: "E2E Tests", status: "running", durationLabel: "Running...", progress: 65 }
+      ],
+      filesChangedTotal: 4,
+      filesChanged: [
+        { path: "src/services/auth.ts", additions: 124, deletions: 12 },
+        { path: "src/middleware/auth.ts", additions: 45, deletions: 0 },
+        { path: "src/routes/login.ts", additions: 12, deletions: 30 }
+      ],
+      linkedIssue: { number: 123, title: "Implement Secure Auth Flow", openedBy: "systems_lead" },
+      systemStatusLabel: "All systems operational"
+    }
+  }
+};
+
 function dummySummary(items: PrTrackingItem[]) {
   const ui = (status: PrDisplayStatus) => items.filter((x) => (x.displayStatus ?? normalizeDisplayStatus(x.status)) === status).length;
   return {
@@ -287,6 +374,29 @@ export async function refreshSinglePr(id: string): Promise<{ message: string; up
   const res = await api.post<{ message: string; updated: number }>(
     "/api/pr-tracking/refresh",
     { id },
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+export async function fetchPrDetail(id: string): Promise<PrDetailResponse> {
+  try {
+    const res = await api.get<PrDetailResponse>(`/api/pr-tracking/${id}/detail`, {
+      headers: authHeaders()
+    });
+    return res.data;
+  } catch (e: any) {
+    if (e?.response?.status === 401 || e?.response?.status === 404 || e?.code === "ERR_NETWORK") {
+      return DUMMY_DETAIL[id] ?? DUMMY_DETAIL["1"];
+    }
+    throw e;
+  }
+}
+
+export async function seedDemoPrTracking(): Promise<{ message: string; inserted: number; ids: string[] }> {
+  const res = await api.post<{ message: string; inserted: number; ids: string[] }>(
+    "/api/pr-tracking/seed-demo",
+    {},
     { headers: authHeaders() }
   );
   return res.data;

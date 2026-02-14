@@ -7,6 +7,7 @@ import HomePage from "./features/homeFeed/pages/HomePage";
 import IssueDetailPage from "./features/issueDetail/pages/IssueDetailPage";
 import ResourcesPage from "./features/resources/pages/ResourcesPage"; // ✅ ADD THIS
 import PrTrackingPage from "./features/prTracking/pages/PrTrackingPage";
+import PrTrackingDetailPage from "./features/prTracking/pages/PrTrackingDetailPage";
 
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
         <Route path="/resources" element={<ResourcesPage />} />
 
         <Route path="/pr-tracking" element={<PrTrackingPage />} />
+        <Route path="/pr-tracking/:id" element={<PrTrackingDetailPage />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

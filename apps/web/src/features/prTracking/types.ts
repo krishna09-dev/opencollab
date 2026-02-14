@@ -62,3 +62,80 @@ export type PrMessage = {
   text: string;
   kind?: PrMessageKind;
 };
+
+export type PrTimelineEntry =
+  | {
+      id: string;
+      type: "opened";
+      actor: string;
+      text: string;
+      atLabel: string;
+    }
+  | {
+      id: string;
+      type: "commits";
+      commits: Array<{ sha: string; message: string; atLabel: string }>;
+    }
+  | {
+      id: string;
+      type: "reviewRequested";
+      actor: string;
+      reviewers: string[];
+    }
+  | {
+      id: string;
+      type: "changesRequested";
+      actor: string;
+      atLabel: string;
+      summary: string;
+      diffOld: string;
+      diffNew: string;
+    }
+  | {
+      id: string;
+      type: "maintainerFeedback";
+      title: string;
+      body: string;
+    }
+  | {
+      id: string;
+      type: "restriction";
+      body: string;
+    };
+
+export type PrDetailResponse = {
+  id: string;
+  title: string;
+  number: number;
+  owner: string;
+  repo: string;
+  status: "OPEN" | "IN_REVIEW" | "CHANGES_REQUESTED" | "MERGED";
+  sourceBranch: string;
+  targetBranch: string;
+  tags: string[];
+  overview: {
+    author: string;
+    commentedAtLabel: string;
+    intro: string;
+    changes: string[];
+    note?: string;
+    linkedIssue: {
+      number: number;
+      title: string;
+      openedBy: string;
+    };
+  };
+  timeline: PrTimelineEntry[];
+  sidebar: {
+    reviewers: Array<{ id: string; name: string; status: "approved" | "changes_requested" | "pending" }>;
+    checks: Array<{ id: string; name: string; status: "success" | "running" | "failed"; durationLabel: string; progress: number }>;
+    filesChangedTotal: number;
+    filesChanged: Array<{ path: string; additions: number; deletions: number }>;
+    linkedIssue: {
+      number: number;
+      title: string;
+      openedBy: string;
+    };
+    systemStatusLabel: string;
+  };
+};
