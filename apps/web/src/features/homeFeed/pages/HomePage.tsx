@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Adjust,
   ArrowBack,
@@ -30,23 +31,8 @@ import {
 import AppLayout from "../../../components/layout/AppLayout";
 import MSym from "../../resources/components/MSym";
 import { api, authHeaders } from "../../../lib/api";
-
-type FeedIssue = {
-  id: string;
-  repo: string;
-  number: string;
-  openedText: string;
-  title: string;
-  body: string;
-  tags: Array<{ label: string; color: string; bg: string; border: string }>;
-  comments: number;
-  likes: number;
-  cta: "View Details" | "Claim" | "View";
-  ctaPrimary?: boolean;
-  iconColor: string;
-  muted?: boolean;
-  claimed?: boolean;
-};
+import { useHomeFeed } from "../hooks/useHomeFeed";
+import type { IssueRow } from "../types";
 
 async function seedAllData(): Promise<{
   message: string;
@@ -56,86 +42,6 @@ async function seedAllData(): Promise<{
   const res = await api.post("/api/seed-all", {}, { headers: authHeaders() });
   return res.data;
 }
-
-const issues: FeedIssue[] = [
-  {
-    id: "1",
-    repo: "facebook/react",
-    number: "#28491",
-    openedText: "opened 2 hours ago by gaearon",
-    title: "Fix hydration mismatch error when using Suspense boundaries in SSR",
-    body:
-      "I've noticed that when using lazy loading components inside a suspense boundary during server-side rendering, the hydration process throws a warning about mismatched HTML content. This seems to happen\u2026",
-    tags: [
-      { label: "TypeScript", color: "#3178c6", bg: "rgba(49,120,198,0.1)", border: "rgba(49,120,198,0.2)" },
-      { label: "Bug", color: "#f87171", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.2)" },
-      { label: "High Priority", color: "#fb923c", bg: "rgba(249,115,22,0.1)", border: "rgba(249,115,22,0.2)" },
-      { label: "Intermediate", color: "#c084fc", bg: "rgba(168,85,247,0.1)", border: "rgba(168,85,247,0.2)" }
-    ],
-    comments: 12,
-    likes: 45,
-    cta: "View Details",
-    ctaPrimary: true,
-    iconColor: "#0df259"
-  },
-  {
-    id: "2",
-    repo: "vercel/next.js",
-    number: "#54102",
-    openedText: "opened 5 hours ago",
-    title: "Update documentation for Image component optimization props",
-    body:
-      "The current docs for next/image are missing examples for the new loaderFile prop introduced in v14. We need to add a section explaining how to use it with custom CDNs.",
-    tags: [
-      { label: "JavaScript", color: "#facc15", bg: "rgba(250,204,21,0.1)", border: "rgba(250,204,21,0.2)" },
-      { label: "Documentation", color: "#60a5fa", bg: "rgba(96,165,250,0.1)", border: "rgba(96,165,250,0.2)" },
-      { label: "Beginner", color: "#2dd4bf", bg: "rgba(45,212,191,0.1)", border: "rgba(45,212,191,0.2)" },
-      { label: "Good First Issue", color: "#f472b6", bg: "rgba(244,114,182,0.1)", border: "rgba(244,114,182,0.2)" }
-    ],
-    comments: 3,
-    likes: 8,
-    cta: "Claim",
-    iconColor: "#4ade80"
-  },
-  {
-    id: "3",
-    repo: "tailwindlabs/tailwindcss",
-    number: "#1294",
-    openedText: "opened 1 day ago",
-    title: "Add support for container queries in arbitrary values",
-    body:
-      "Currently, arbitrary values work great for most utilities, but container queries seem to ignore custom breakpoints defined inline. Would be great to have @container-[500px]:bg-red-500 working out of the box.",
-    tags: [
-      { label: "CSS", color: "#22d3ee", bg: "rgba(6,182,212,0.1)", border: "rgba(6,182,212,0.2)" },
-      { label: "Feature Request", color: "#818cf8", bg: "rgba(99,102,241,0.1)", border: "rgba(99,102,241,0.2)" },
-      { label: "Advanced", color: "#fb7185", bg: "rgba(244,63,94,0.1)", border: "rgba(244,63,94,0.2)" }
-    ],
-    comments: 28,
-    likes: 102,
-    cta: "Claim",
-    iconColor: "#0df259"
-  },
-  {
-    id: "4",
-    repo: "rust-lang/rust",
-    number: "#98321",
-    openedText: "opened 2 days ago",
-    title: "Optimization pass for borrow checker diagnostics",
-    body:
-      "Some error messages regarding lifetimes are still a bit cryptic for newcomers. We have a proposal to simplify the output for common distinct lifetime mismatch errors.",
-    tags: [
-      { label: "Rust", color: "#fb923c", bg: "rgba(194,65,12,0.1)", border: "rgba(249,115,22,0.2)" },
-      { label: "Compiler", color: "#60a5fa", bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.2)" },
-      { label: "Advanced", color: "#fb7185", bg: "rgba(244,63,94,0.1)", border: "rgba(244,63,94,0.2)" }
-    ],
-    comments: 54,
-    likes: 210,
-    cta: "View",
-    iconColor: "#c084fc",
-    muted: true,
-    claimed: true
-  }
-];
 
 const filterChipSx = {
   borderRadius: "14px",
@@ -147,6 +53,43 @@ const filterChipSx = {
   fontWeight: 500,
   ".MuiChip-label": { px: 1.5 }
 };
+
+// ─── Tag color helpers ───
+const TAG_COLORS: Record<string, { color: string; bg: string; border: string }> = {
+  bug: { color: "#f87171", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.2)" },
+  feature: { color: "#818cf8", bg: "rgba(99,102,241,0.1)", border: "rgba(99,102,241,0.2)" },
+  enhancement: { color: "#818cf8", bg: "rgba(99,102,241,0.1)", border: "rgba(99,102,241,0.2)" },
+  documentation: { color: "#60a5fa", bg: "rgba(96,165,250,0.1)", border: "rgba(96,165,250,0.2)" },
+  "good first issue": { color: "#f472b6", bg: "rgba(244,114,182,0.1)", border: "rgba(244,114,182,0.2)" },
+  "help wanted": { color: "#2dd4bf", bg: "rgba(45,212,191,0.1)", border: "rgba(45,212,191,0.2)" },
+  javascript: { color: "#facc15", bg: "rgba(250,204,21,0.1)", border: "rgba(250,204,21,0.2)" },
+  typescript: { color: "#3178c6", bg: "rgba(49,120,198,0.1)", border: "rgba(49,120,198,0.2)" },
+  python: { color: "#3b82f6", bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.2)" },
+  rust: { color: "#fb923c", bg: "rgba(194,65,12,0.1)", border: "rgba(249,115,22,0.2)" },
+  react: { color: "#22d3ee", bg: "rgba(6,182,212,0.1)", border: "rgba(6,182,212,0.2)" }
+};
+
+const DEFAULT_TAG_COLOR = { color: "#a1a1aa", bg: "rgba(161,161,170,0.1)", border: "rgba(161,161,170,0.2)" };
+
+function getTagColor(label: string) {
+  return TAG_COLORS[label.toLowerCase()] || DEFAULT_TAG_COLOR;
+}
+
+function getStatusColor(status: string) {
+  if (status === "open") return "#0df259";
+  if (status === "claimed") return "#c084fc";
+  return "#a1a1aa";
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 function HomeSidebarExtra() {
   const [seeding, setSeeding] = useState(false);
@@ -262,7 +205,171 @@ function HomeSidebarExtra() {
   );
 }
 
+function IssueCard({ issue }: { issue: IssueRow }) {
+  const navigate = useNavigate();
+  const isClaimed = issue.status === "claimed";
+  const isClosed = issue.status === "closed";
+  const muted = isClaimed || isClosed;
+
+  const cta = isClaimed ? "View" : isClosed ? "Closed" : issue.status === "open" ? "View Details" : "View";
+  const ctaPrimary = issue.status === "open";
+
+  return (
+    <Box
+      sx={{
+        p: 2.6,
+        borderRadius: "20px",
+        border: "1px solid #27272a",
+        bgcolor: muted ? "rgba(11,15,23,0.5)" : "#0b0f17",
+        opacity: muted ? 0.8 : 1,
+        position: "relative",
+        cursor: "pointer",
+        transition: "border-color 0.2s",
+        "&:hover": { borderColor: "#3f3f46" }
+      }}
+      onClick={() => navigate(`/issues/${issue._id}`)}
+    >
+      <Stack direction="row" spacing={2} alignItems="flex-start">
+        <Adjust sx={{ fontSize: 22, mt: 0.5, color: getStatusColor(issue.status) }} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontSize: 12, color: "#a1a1aa", mb: 0.7, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+            {issue.repoOwner}/{issue.repoName} • #{issue.githubNumber} • {timeAgo(issue.githubCreatedAt)}
+          </Typography>
+          <Typography sx={{ fontSize: 30 / 1.6, fontWeight: 600, lineHeight: "28px", mb: 0.8, color: muted ? "rgba(255,255,255,0.8)" : "#fff" }}>
+            {issue.title}
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: "#a1a1aa", lineHeight: "22px", mb: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {issue.summary || issue.body?.slice(0, 200)}
+          </Typography>
+
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              {(issue.labels || []).slice(0, 4).map((label) => {
+                const tc = getTagColor(label);
+                return (
+                  <Chip
+                    key={label}
+                    label={label}
+                    sx={{
+                      height: 26,
+                      borderRadius: "8px",
+                      fontWeight: 500,
+                      color: tc.color,
+                      bgcolor: tc.bg,
+                      border: `1px solid ${tc.border}`,
+                      ".MuiChip-label": { px: 1.1, fontSize: 12 }
+                    }}
+                  />
+                );
+              })}
+              {issue.beginnerFriendly && !issue.labels?.some((l) => l.toLowerCase().includes("good first")) && (
+                <Chip
+                  label="Beginner Friendly"
+                  sx={{
+                    height: 26,
+                    borderRadius: "8px",
+                    fontWeight: 500,
+                    color: "#2dd4bf",
+                    bgcolor: "rgba(45,212,191,0.1)",
+                    border: "1px solid rgba(45,212,191,0.2)",
+                    ".MuiChip-label": { px: 1.1, fontSize: 12 }
+                  }}
+                />
+              )}
+            </Stack>
+            <Stack direction="row" spacing={2}>
+              <Stack direction="row" spacing={0.7} alignItems="center">
+                <ChatBubbleOutline sx={{ fontSize: 16, color: "#a1a1aa" }} />
+                <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>
+                  {issue.requiredSkills?.length || 0}
+                </Typography>
+              </Stack>
+              <Stack direction="row" spacing={0.7} alignItems="center">
+                <ThumbUpOffAlt sx={{ fontSize: 16, color: "#a1a1aa" }} />
+                <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>
+                  {issue.labels?.length || 0}
+                </Typography>
+              </Stack>
+            </Stack>
+          </Stack>
+        </Box>
+        <Button
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/issues/${issue._id}`);
+          }}
+          sx={
+            ctaPrimary
+              ? {
+                  minHeight: 36,
+                  textTransform: "none",
+                  borderRadius: "14px",
+                  px: 2,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  bgcolor: "#19e66b",
+                  color: "#000",
+                  boxShadow: "0 0 10px rgba(25,230,107,0.2)",
+                  whiteSpace: "nowrap"
+                }
+              : {
+                  minHeight: 36,
+                  textTransform: "none",
+                  borderRadius: "14px",
+                  px: 2,
+                  fontSize: 14,
+                  fontWeight: 500,
+                  border: "1px solid #27272a",
+                  color: isClosed ? "#a1a1aa" : "#fff",
+                  bgcolor: "#0b0f17",
+                  whiteSpace: "nowrap"
+                }
+          }
+        >
+          {cta}
+        </Button>
+      </Stack>
+      {isClaimed && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: -10,
+            right: -8,
+            px: 1.2,
+            py: 0.2,
+            borderRadius: "999px",
+            border: "1px solid rgba(168,85,247,0.3)",
+            bgcolor: "rgba(168,85,247,0.2)",
+            backdropFilter: "blur(6px)"
+          }}
+        >
+          <Typography sx={{ fontSize: 10, color: "#d8b4fe", fontWeight: 700, letterSpacing: "0.025em", textTransform: "uppercase" }}>
+            Claimed{issue.claimedByLogin ? ` by ${issue.claimedByLogin}` : ""}
+          </Typography>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 export default function HomePage() {
+  const {
+    issues,
+    pagination,
+    issuesLoading,
+    issuesError,
+    filters,
+    updateFilters,
+    goToPage,
+    loadIssues
+  } = useHomeFeed();
+
+  const [searchInput, setSearchInput] = useState("");
+
+  const handleSearch = () => {
+    updateFilters({ search: searchInput, page: 1 });
+  };
+
   return (
     <AppLayout activePage="feed" sidebarExtra={<HomeSidebarExtra />}>
       <Box sx={{ maxWidth: 1152, mx: "auto", px: 3, py: 5 }}>
@@ -290,12 +397,16 @@ export default function HomePage() {
             <Search sx={{ color: "#a1a1aa", fontSize: 20 }} />
             <InputBase
               fullWidth
-              value=""
-              placeholder="Search issues, repos, or authors (e.g. is:open label:bug)"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+              placeholder="Search issues, repos, or authors..."
               sx={{ color: "#a1a1aa", fontSize: 14 }}
-              readOnly
             />
-            <Box sx={{ px: 0.8, py: 0.3, borderRadius: "8px", border: "1px solid #27272a", bgcolor: "rgba(11,15,23,0.5)", color: "#a1a1aa", fontSize: 12 }}>
+            <Box
+              sx={{ px: 0.8, py: 0.3, borderRadius: "8px", border: "1px solid #27272a", bgcolor: "rgba(11,15,23,0.5)", color: "#a1a1aa", fontSize: 12, cursor: "pointer" }}
+              onClick={handleSearch}
+            >
               /
             </Box>
           </Box>
@@ -313,8 +424,12 @@ export default function HomePage() {
               sx={toolbarButtonSx}
               startIcon={<Sort sx={{ fontSize: 18 }} />}
               endIcon={<ExpandMore sx={{ fontSize: 18, color: "#a1a1aa" }} />}
+              onClick={() => {
+                const nextSort = filters.sort === "newest" ? "oldest" : "newest";
+                updateFilters({ sort: nextSort });
+              }}
             >
-              Sort
+              {filters.sort === "oldest" ? "Oldest" : "Newest"}
             </Button>
             <Stack direction="row" spacing={0.5} sx={{ bgcolor: "#0b0f17", border: "1px solid #27272a", borderRadius: "14px", p: 0.7 }}>
               <IconButton sx={{ width: 30, height: 30, borderRadius: "6px", bgcolor: "rgba(11,15,23,0.8)", color: "#fff" }}>
@@ -327,153 +442,129 @@ export default function HomePage() {
           </Stack>
         </Stack>
 
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2.5 }}>
-          <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Active:</Typography>
-          <Chip label="repo:facebook/react" onDelete={() => undefined} sx={{ height: 26, borderRadius: "6px", bgcolor: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", color: "#60a5fa", ".MuiChip-deleteIcon": { color: "rgba(96,165,250,0.7)", fontSize: 16 } }} />
-          <Chip label="is:open" onDelete={() => undefined} sx={{ height: 26, borderRadius: "6px", bgcolor: "rgba(25,230,107,0.1)", border: "1px solid rgba(25,230,107,0.2)", color: "#19e66b", ".MuiChip-deleteIcon": { color: "rgba(25,230,107,0.7)", fontSize: 16 } }} />
-          <Typography sx={{ fontSize: 12, color: "#a1a1aa" }}>Clear all</Typography>
-        </Stack>
-
-        <Stack spacing={2}>
-          {issues.map((issue) => (
-            <Box
-              key={issue.id}
-              sx={{
-                p: 2.6,
-                borderRadius: "20px",
-                border: "1px solid #27272a",
-                bgcolor: issue.muted ? "rgba(11,15,23,0.5)" : "#0b0f17",
-                opacity: issue.muted ? 0.8 : 1,
-                position: "relative"
-              }}
+        {/* Active filter chips */}
+        {(filters.search || filters.status) && (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2.5 }}>
+            <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Active:</Typography>
+            {filters.search && (
+              <Chip
+                label={`search: ${filters.search}`}
+                onDelete={() => { setSearchInput(""); updateFilters({ search: undefined, page: 1 }); }}
+                sx={{ height: 26, borderRadius: "6px", bgcolor: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", color: "#60a5fa", ".MuiChip-deleteIcon": { color: "rgba(96,165,250,0.7)", fontSize: 16 } }}
+              />
+            )}
+            {filters.status && (
+              <Chip
+                label={`status: ${filters.status}`}
+                onDelete={() => updateFilters({ status: undefined, page: 1 })}
+                sx={{ height: 26, borderRadius: "6px", bgcolor: "rgba(25,230,107,0.1)", border: "1px solid rgba(25,230,107,0.2)", color: "#19e66b", ".MuiChip-deleteIcon": { color: "rgba(25,230,107,0.7)", fontSize: 16 } }}
+              />
+            )}
+            <Typography
+              sx={{ fontSize: 12, color: "#a1a1aa", cursor: "pointer" }}
+              onClick={() => { setSearchInput(""); updateFilters({ search: undefined, status: undefined, language: undefined, difficulty: undefined, page: 1 }); }}
             >
-              <Stack direction="row" spacing={2} alignItems="flex-start">
-                <Adjust sx={{ fontSize: 22, mt: 0.5, color: issue.iconColor }} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontSize: 12, color: "#a1a1aa", mb: 0.7, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                    {issue.repo} • {issue.number} • {issue.openedText}
-                  </Typography>
-                  <Typography sx={{ fontSize: 30/1.6, fontWeight: 600, lineHeight: "28px", mb: 0.8, color: issue.muted ? "rgba(255,255,255,0.8)" : "#fff" }}>
-                    {issue.title}
-                  </Typography>
-                  <Typography sx={{ fontSize: 14, color: "#a1a1aa", lineHeight: "22px", mb: 1.5 }}>{issue.body}</Typography>
-
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                      {issue.tags.map((tag) => (
-                        <Chip
-                          key={tag.label}
-                          label={tag.label}
-                          sx={{
-                            height: 26,
-                            borderRadius: "8px",
-                            fontWeight: 500,
-                            color: tag.color,
-                            bgcolor: tag.bg,
-                            border: `1px solid ${tag.border}`,
-                            ".MuiChip-label": { px: 1.1, fontSize: 12 }
-                          }}
-                        />
-                      ))}
-                    </Stack>
-                    <Stack direction="row" spacing={2}>
-                      <Stack direction="row" spacing={0.7} alignItems="center">
-                        <ChatBubbleOutline sx={{ fontSize: 16, color: "#a1a1aa" }} />
-                        <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>{issue.comments}</Typography>
-                      </Stack>
-                      <Stack direction="row" spacing={0.7} alignItems="center">
-                        <ThumbUpOffAlt sx={{ fontSize: 16, color: "#a1a1aa" }} />
-                        <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>{issue.likes}</Typography>
-                      </Stack>
-                    </Stack>
-                  </Stack>
-                </Box>
-                <Button
-                  sx={
-                    issue.ctaPrimary
-                      ? {
-                          minHeight: 36,
-                          textTransform: "none",
-                          borderRadius: "14px",
-                          px: 2,
-                          fontSize: 14,
-                          fontWeight: 600,
-                          bgcolor: "#19e66b",
-                          color: "#000",
-                          boxShadow: "0 0 10px rgba(25,230,107,0.2)",
-                          whiteSpace: "nowrap"
-                        }
-                      : {
-                          minHeight: 36,
-                          textTransform: "none",
-                          borderRadius: "14px",
-                          px: 2,
-                          fontSize: 14,
-                          fontWeight: 500,
-                          border: "1px solid #27272a",
-                          color: issue.cta === "View" ? "#a1a1aa" : "#fff",
-                          bgcolor: "#0b0f17",
-                          whiteSpace: "nowrap"
-                        }
-                  }
-                >
-                  {issue.cta}
-                </Button>
-              </Stack>
-              {issue.claimed && (
-                <Box
-                  sx={{
-                    position: "absolute",
-                    top: -10,
-                    right: -8,
-                    px: 1.2,
-                    py: 0.2,
-                    borderRadius: "999px",
-                    border: "1px solid rgba(168,85,247,0.3)",
-                    bgcolor: "rgba(168,85,247,0.2)",
-                    backdropFilter: "blur(6px)"
-                  }}
-                >
-                  <Typography sx={{ fontSize: 10, color: "#d8b4fe", fontWeight: 700, letterSpacing: "0.025em", textTransform: "uppercase" }}>
-                    Claimed
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          ))}
-        </Stack>
-
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 3.2, pt: 3, borderTop: "1px solid #27272a" }}>
-          <Button sx={pageButtonSx} startIcon={<ArrowBack sx={{ fontSize: 18 }} />}>Previous</Button>
-          <Stack direction="row" spacing={0.5} alignItems="center">
-            {["1", "2", "3"].map((pg, index) => (
-              <Box
-                key={pg}
-                sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "6px",
-                  display: "grid",
-                  placeItems: "center",
-                  bgcolor: index === 0 ? "rgba(25,230,107,0.2)" : "transparent",
-                  color: index === 0 ? "#19e66b" : "#a1a1aa",
-                  fontWeight: index === 0 ? 700 : 400,
-                  fontSize: 14
-                }}
-              >
-                {pg}
-              </Box>
-            ))}
-            <Typography sx={{ color: "#a1a1aa", px: 0.5, fontSize: 14 }}>...</Typography>
-            <Box sx={{ width: 32, height: 32, borderRadius: "6px", display: "grid", placeItems: "center", color: "#a1a1aa", fontSize: 14 }}>
-              12
-            </Box>
+              Clear all
+            </Typography>
           </Stack>
-          <Button sx={pageButtonSx} endIcon={<ArrowForward sx={{ fontSize: 18 }} />}>Next</Button>
-        </Stack>
+        )}
+
+        {/* ─── Feed content ─── */}
+        {issuesLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+            <CircularProgress sx={{ color: "#19e66b" }} />
+          </Box>
+        ) : issuesError ? (
+          <Box sx={{ textAlign: "center", py: 8 }}>
+            <Typography sx={{ color: "#f87171", mb: 2 }}>{issuesError}</Typography>
+            <Button onClick={loadIssues} sx={{ textTransform: "none", color: "#19e66b" }}>Retry</Button>
+          </Box>
+        ) : issues.length === 0 ? (
+          <Box sx={{ textAlign: "center", py: 8 }}>
+            <MSym name="inbox" sx={{ fontSize: 48, color: "#27272a", mb: 2 }} />
+            <Typography sx={{ color: "#a1a1aa", fontSize: 16 }}>No issues found.</Typography>
+            <Typography sx={{ color: "#52525b", fontSize: 14, mt: 0.5 }}>
+              Try adjusting your filters or seed some demo data from the sidebar.
+            </Typography>
+          </Box>
+        ) : (
+          <Stack spacing={2}>
+            {issues.map((issue) => (
+              <IssueCard key={issue._id} issue={issue} />
+            ))}
+          </Stack>
+        )}
+
+        {/* ─── Pagination ─── */}
+        {pagination && pagination.totalPages > 1 && (
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 3.2, pt: 3, borderTop: "1px solid #27272a" }}>
+            <Button
+              sx={pageButtonSx}
+              startIcon={<ArrowBack sx={{ fontSize: 18 }} />}
+              disabled={pagination.page <= 1}
+              onClick={() => goToPage(pagination.page - 1)}
+            >
+              Previous
+            </Button>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
+                let pg: number;
+                if (pagination.totalPages <= 5) {
+                  pg = i + 1;
+                } else if (pagination.page <= 3) {
+                  pg = i + 1;
+                } else if (pagination.page >= pagination.totalPages - 2) {
+                  pg = pagination.totalPages - 4 + i;
+                } else {
+                  pg = pagination.page - 2 + i;
+                }
+                return (
+                  <Box
+                    key={pg}
+                    onClick={() => goToPage(pg)}
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: "6px",
+                      display: "grid",
+                      placeItems: "center",
+                      cursor: "pointer",
+                      bgcolor: pg === pagination.page ? "rgba(25,230,107,0.2)" : "transparent",
+                      color: pg === pagination.page ? "#19e66b" : "#a1a1aa",
+                      fontWeight: pg === pagination.page ? 700 : 400,
+                      fontSize: 14,
+                      "&:hover": { bgcolor: pg === pagination.page ? "rgba(25,230,107,0.2)" : "rgba(255,255,255,0.05)" }
+                    }}
+                  >
+                    {pg}
+                  </Box>
+                );
+              })}
+              {pagination.totalPages > 5 && pagination.page < pagination.totalPages - 2 && (
+                <>
+                  <Typography sx={{ color: "#a1a1aa", px: 0.5, fontSize: 14 }}>...</Typography>
+                  <Box
+                    onClick={() => goToPage(pagination.totalPages)}
+                    sx={{ width: 32, height: 32, borderRadius: "6px", display: "grid", placeItems: "center", color: "#a1a1aa", fontSize: 14, cursor: "pointer" }}
+                  >
+                    {pagination.totalPages}
+                  </Box>
+                </>
+              )}
+            </Stack>
+            <Button
+              sx={pageButtonSx}
+              endIcon={<ArrowForward sx={{ fontSize: 18 }} />}
+              disabled={pagination.page >= pagination.totalPages}
+              onClick={() => goToPage(pagination.page + 1)}
+            >
+              Next
+            </Button>
+          </Stack>
+        )}
 
         <Typography sx={{ mt: 4, color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
-          © 2023 OpenCollab Inc. · Terms · Privacy
+          {pagination ? `Showing ${issues.length} of ${pagination.total} issues` : ""}
         </Typography>
       </Box>
     </AppLayout>

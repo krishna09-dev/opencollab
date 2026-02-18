@@ -66,8 +66,10 @@ export default function AppLayout({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          position: "sticky",
+          position: "fixed",
           top: 0,
+          left: 0,
+          right: 0,
           zIndex: 10
         }}
       >
@@ -110,9 +112,27 @@ export default function AppLayout({
       </Box>
 
       {/* ─── BODY ─── */}
-      <Box sx={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
+      <Box sx={{ pt: "64px" }}>
         {/* ─── SIDEBAR ─── */}
-        <Box sx={{ width: 288, borderRight: "1px solid #27272a", px: 3, py: 3, display: { xs: "none", md: "block" } }}>
+        <Box
+          sx={{
+            width: "280px",
+            boxSizing: "border-box",
+            borderRight: "1px solid #27272a",
+            px: 3,
+            py: 3,
+            display: { xs: "none", md: "block" },
+            position: "fixed",
+            top: 64,
+            left: 0,
+            bottom: 0,
+            overflowY: "auto",
+            bgcolor: "#050509",
+            zIndex: 9,
+            "&::-webkit-scrollbar": { width: 4 },
+            "&::-webkit-scrollbar-thumb": { bgcolor: "#27272a", borderRadius: 2 }
+          }}
+        >
           <Typography sx={{ color: "#a1a1aa", fontWeight: 600, fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase", px: 1 }}>
             Explore
           </Typography>
@@ -156,7 +176,14 @@ export default function AppLayout({
         </Box>
 
         {/* ─── MAIN CONTENT ─── */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Box
+          sx={{
+            minHeight: "calc(100vh - 64px)",
+            ml: { xs: 0, md: "280px" },
+            position: "relative",
+            zIndex: 1
+          }}
+        >
           {children}
         </Box>
       </Box>

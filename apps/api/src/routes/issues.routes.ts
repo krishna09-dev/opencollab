@@ -386,13 +386,89 @@ router.get("/stats", authRequired, async (_req: AuthRequest, res: Response) => {
   }
 });
 
-router.get("/", authRequired, async (_req: AuthRequest, res: Response) => {
+router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
   try {
-    const issues = await Issue.find({})
-      .sort({ updatedAt: -1 })
-      .select("_id githubNumber repoOwner repoName title status labels");
+    const {
+      page = "1",
+      limit = "10",
+      status,
+      language,
+      difficulty,
+      search,
+      sort = "newest"
+    } = req.query as Record<string, string | undefined>;
 
-    return res.json(issues);
+    const pageNum = Math.max(1, parseInt(page || "1", 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit || "10", 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build filter
+    const filter: Record<string, any> = {};
+
+    if (status && ["open", "claimed", "closed"].includes(status)) {
+      filter.status = status;
+    }
+
+    if (language) {
+      const langs = language.split(",").map((l) => l.trim()).filter(Boolean);
+      if (langs.length > 0) {
+        filter.$or = langs.map((l) => ({
+          $or: [
+            { labels: { $regex: new RegExp(l, "i") } },
+            { requiredSkills: { $regex: new RegExp(l, "i") } }
+          ]
+        }));
+      }
+    }
+
+    if (difficulty) {
+      if (difficulty === "beginner") {
+        filter.beginnerFriendly = true;
+      }
+    }
+
+    if (search && search.trim()) {
+      const s = search.trim();
+      filter.$and = [
+        ...(filter.$and || []),
+        {
+          $or: [
+            { title: { $regex: new RegExp(s, "i") } },
+            { repoName: { $regex: new RegExp(s, "i") } },
+            { repoOwner: { $regex: new RegExp(s, "i") } },
+            { summary: { $regex: new RegExp(s, "i") } }
+          ]
+        }
+      ];
+    }
+
+    // Sort
+    let sortObj: Record<string, 1 | -1> = { githubUpdatedAt: -1 };
+    if (sort === "oldest") sortObj = { githubUpdatedAt: 1 };
+    else if (sort === "recently-created") sortObj = { githubCreatedAt: -1 };
+
+    const [issues, total] = await Promise.all([
+      Issue.find(filter)
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limitNum)
+        .select(
+          "_id githubNumber repoOwner repoName title body summary status labels " +
+          "requiredSkills beginnerFriendly githubCreatedAt githubUpdatedAt " +
+          "claimedByLogin githubUrl"
+        ),
+      Issue.countDocuments(filter)
+    ]);
+
+    return res.json({
+      issues,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
   } catch (err) {
     console.error("GET /api/issues error:", err);
     return res.status(500).json({ message: "Failed to load issues list" });

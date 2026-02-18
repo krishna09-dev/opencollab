@@ -10,6 +10,7 @@ import issuesRouter from "./routes/issues.routes";
 import notificationsRouter from "./routes/notifications.routes";
 import resourcesRoutes from "./routes/resources.routes";
 import prTrackingRoutes from "./routes/prTracking.routes";
+import seedRoutes from "./routes/seed.routes";
 
 // Sprint 5
 import ingestionRoutes from "./routes/ingestion.routes";
@@ -37,6 +38,7 @@ app.use("/api/issues", issuesRouter);
 app.use("/api", notificationsRouter);
 app.use("/api/resources", resourcesRoutes);
 app.use("/api/pr-tracking", prTrackingRoutes);
+app.use("/api/seed-all", seedRoutes);
 
 
 // Internal/dev trigger endpoint: POST /api/ingestion/run
