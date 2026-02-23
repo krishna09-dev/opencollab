@@ -66,8 +66,8 @@ export default function IssueDetailPage() {
   const pageLoading = loadingIssue || loadingUser;
 
   return (
-    <Box sx={{ minHeight: "100vh", width: "100%", bgcolor: "#0b0b10", position: "relative", color: "#e5e7eb", fontFamily: '"poppins", sans-serif' }}>
-      <GlobalStyles styles={{ body: { backgroundColor: "#0b0b10" } }} />
+    <Box sx={{ minHeight: "100vh", width: "100%", bgcolor: "#0a080c", position: "relative", color: "#e5e7eb", fontFamily: '"poppins", sans-serif' }}>
+      <GlobalStyles styles={{ body: { backgroundColor: "#0a080c" } }} />
 
       {/* Background blobs */}
       <Box
@@ -84,7 +84,7 @@ export default function IssueDetailPage() {
 
       <IssueDetailHeader currentUser={currentUser} unreadCount={unreadCount} />
 
-      <Container maxWidth={false} sx={{ maxWidth: 1440, py: 3, px: { xs: 2, md: 3, lg: 5 } }}>
+      <Container maxWidth={false} sx={{ maxWidth: 1440, py: 4, px: { xs: 2, md: 5, lg: 10 } }}>
         {pageLoading ? (
           <Box sx={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <CircularProgress />
@@ -131,7 +131,7 @@ export default function IssueDetailPage() {
             </Box>
 
             {/* RIGHT */}
-            <Box sx={{ width: { xs: "100%", lg: 360 }, flexShrink: 0 }}>
+            <Box sx={{ width: { xs: "100%", lg: 276 }, flexShrink: 0, position: { xs: "static", lg: "sticky" }, top: 88 }}>
               <IssueStatusCard
                 issue={issue}
                 isClaimedByMe={isClaimedByMe}

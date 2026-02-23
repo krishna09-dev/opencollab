@@ -26,12 +26,15 @@ export default function IssueStatusCard({
   handleAbort,
   handleNotify
 }: Props) {
+  const canAbort = isClaimedByMe;
+  const isClosed = issue.status === "closed";
+
   return (
     <Paper
       elevation={0}
       sx={{
         bgcolor: "transparent",
-        paddingTop: 2.5,
+        paddingTop: 1,
         position: "relative",
         overflow: "hidden",
         mb: 2.5
@@ -41,44 +44,39 @@ export default function IssueStatusCard({
       <Box sx={{ position: "relative", zIndex: 1 }}>
         <Button
           fullWidth
-          onClick={isClaimedByMe ? handleAbort : handleClaim}
+          onClick={canAbort ? handleAbort : handleClaim}
           disabled={
             claiming ||
             aborting ||
-            (isClaimedByOther && !isClaimedByMe) ||
-            issue.status === "closed"
+            (isClaimedByOther && !canAbort) ||
+            isClosed
           }
           sx={{
             mb: 2,
-            height: 40,
-            borderRadius: 999,
+            height: 48,
+            borderRadius: "12px",
             textTransform: "none",
-            fontWeight: 900,
-            bgcolor: isClaimedByMe ? "#fb7185" : "#19e66b",
+            fontWeight: 700,
+            fontSize: 16,
+            bgcolor: canAbort ? "#fc5555" : "#55fc7b",
             color: "#000",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: 1,
             "&:hover": {
-              bgcolor: isClaimedByMe ? "#f43f5e" : "#22c55e"
+              bgcolor: canAbort ? "#f43f5e" : "#22c55e"
             },
             "&.Mui-disabled": {
               bgcolor: "rgba(255,255,255,0.08)",
               color: "#6b7280"
             }
           }}
+          endIcon={!isClosed ? <MSym name={canAbort ? "close" : "attribution"} sx={{ fontSize: 22 }} /> : undefined}
         >
-          {issue.status !== "closed" && (
-            <MSym
-              name={isClaimedByMe ? "close" : "attribution"}
-              sx={{ fontSize: 24, lineHeight: 1 }}
-            />
-          )}
-
-          {issue.status === "closed"
+          {isClosed
             ? "Issue Closed"
-            : isClaimedByMe
+            : canAbort
             ? aborting
               ? "Aborting..."
               : "Abort Issue"
@@ -91,10 +89,10 @@ export default function IssueStatusCard({
 
         <Stack spacing={1} sx={{ color: "#cbd5e1", fontSize: 13 }}>
           <Stack direction="row" justifyContent="space-between">
-            <Typography sx={{ color: "#9ca3af", fontWeight: 300, fontSize: 14 }}>
+            <Typography sx={{ color: "#fff", fontWeight: 600, fontSize: 16 }}>
               Issue Opened on :
             </Typography>
-            <Typography sx={{ color: "#e5e7eb", fontWeight: 500, fontSize: 14 }}>
+            <Typography sx={{ color: "#adadad", fontWeight: 300, fontSize: 16 }}>
               {timeAgo(issue.openedAt)}
             </Typography>
           </Stack>
@@ -102,19 +100,19 @@ export default function IssueStatusCard({
           {(issue.status === "claimed" || !!issue.claimedAt || !!issue.claimedByLogin) && (
             <>
               <Stack direction="row" justifyContent="space-between">
-                <Typography sx={{ color: "#9ca3af", fontWeight: 300, fontSize: 14 }}>
+                <Typography sx={{ color: "#fff", fontWeight: 600, fontSize: 16 }}>
                   Issue Claimed on :
                 </Typography>
-                <Typography sx={{ color: "#e5e7eb", fontWeight: 500, fontSize: 14 }}>
+                <Typography sx={{ color: "#adadad", fontWeight: 300, fontSize: 16 }}>
                   {issue.claimedAt ? timeAgo(issue.claimedAt) : "-"}
                 </Typography>
               </Stack>
 
               <Stack direction="row" justifyContent="space-between">
-                <Typography sx={{ color: "#9ca3af", fontWeight: 300, fontSize: 14 }}>
+                <Typography sx={{ color: "#fff", fontWeight: 600, fontSize: 16 }}>
                   Issue Claimed By :
                 </Typography>
-                <Typography sx={{ color: "#e5e7eb", fontWeight: 500, fontSize: 14 }}>
+                <Typography sx={{ color: "#adadad", fontWeight: 300, fontSize: 16 }}>
                   {issue.claimedByLogin || "-"}
                 </Typography>
               </Stack>
@@ -129,10 +127,10 @@ export default function IssueStatusCard({
             disabled={isWatching}
             sx={{
               mt: 2,
-              height: 40,
-              borderRadius: 999,
+              height: 44,
+              borderRadius: "12px",
               textTransform: "none",
-              fontWeight: 900,
+              fontWeight: 700,
               bgcolor: "rgba(25,230,107,0.10)",
               border: "1px solid rgba(25,230,107,0.20)",
               color: "#19e66b",

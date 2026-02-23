@@ -3,9 +3,8 @@ import {
   Badge,
   Box,
   Button,
+  Divider,
   IconButton,
-  InputBase,
-  Paper,
   Stack,
   Typography
 } from "@mui/material";
@@ -25,36 +24,36 @@ export default function IssueDetailHeader({ currentUser, unreadCount }: Props) {
     <Box
       component="header"
       sx={{
-        position: "relative",
+        position: "sticky",
         top: 0,
         zIndex: 50,
         px: 3,
-        py: 1.5,
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        backdropFilter: "blur(12px)"
+        height: 64,
+        borderBottom: "1px solid #27272a",
+        bgcolor: "rgba(5,5,9,0.48)",
+        backdropFilter: "blur(8px)",
+        display: "flex",
+        alignItems: "center"
       }}
     >
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Stack direction="row" alignItems="center" spacing={3}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ width: "100%" }}>
+        <Stack direction="row" alignItems="center" spacing={2}>
           <Stack
             direction="row"
             alignItems="center"
-            spacing={1.5}
+            spacing={1.25}
             sx={{ cursor: "pointer" }}
             onClick={() => navigate("/feed")}
           >
             <Box
               sx={{
-                width: 34,
-                height: 34,
-                borderRadius: "10px",
-                border: "1px solid rgba(25,230,107,0.35)",
-                bgcolor: "rgba(17,17,26,0.35)",
-                backdropFilter: "blur(14px)",
+                width: 32,
+                height: 32,
+                borderRadius: "14px",
+                bgcolor: "rgba(13,242,89,0.2)",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 10px 25px rgba(0,0,0,0.35)"
+                justifyContent: "center"
               }}
             >
               <MSym name="terminal" sx={{ fontSize: 20, color: "#19e66b" }} />
@@ -63,92 +62,35 @@ export default function IssueDetailHeader({ currentUser, unreadCount }: Props) {
               OpenCollab
             </Typography>
           </Stack>
-
-          {/* Search */}
-          <Box sx={{ display: { xs: "none", md: "block" } }}>
-            <Paper
-              elevation={0}
-              sx={{
-                width: 420,
-                borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.08)",
-                bgcolor: "#11111a",
-                px: 1.5,
-                py: 0.75,
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.2)"
-              }}
-            >
-              <MSym name="search" sx={{ fontSize: 20, color: "#6b7280" }} />
-              <InputBase placeholder="Search issues, repos, users..." sx={{ color: "#cbd5e1", flex: 1, fontSize: 14 }} />
-              <Box
-                component="kbd"
-                sx={{
-                  border: "1px solid #374151",
-                  borderRadius: 1,
-                  px: 1,
-                  fontSize: 12,
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                  color: "#6b7280"
-                }}
-              >
-                ⌘K
-              </Box>
-            </Paper>
-          </Box>
         </Stack>
 
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <IconButton
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: 999,
-              color: "#9ca3af",
-              "&:hover": { bgcolor: "rgba(255,255,255,0.10)", color: "#fff" }
-            }}
-          >
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <IconButton sx={{ color: "#a1a1aa" }}>
             <Badge
               variant={unreadCount > 0 ? "dot" : "standard"}
               color="success"
-              overlap="circular"
               sx={{
                 "& .MuiBadge-badge": {
                   bgcolor: "#19e66b",
-                  border: "2px solid #0b0b10",
-                  right: 10,
-                  top: 10
+                  border: "2px solid #050509",
+                  right: 6,
+                  top: 8
                 }
               }}
             >
-              <MSym name="notifications" sx={{ fontSize: 22 }} />
+              <MSym name="notifications" sx={{ fontSize: 19 }} />
             </Badge>
           </IconButton>
-
+          <IconButton sx={{ color: "#a1a1aa" }}>
+            <MSym name="add_circle" sx={{ fontSize: 19 }} />
+          </IconButton>
+          <Divider orientation="vertical" flexItem sx={{ borderColor: "#27272a", mx: 0.5 }} />
           <Button
-            variant="text"
-            sx={{
-              borderRadius: 999,
-              textTransform: "none",
-              px: 1,
-              py: 0.5,
-              color: "#e5e7eb",
-              "&:hover": { bgcolor: "rgba(255,255,255,0.10)" }
-            }}
-            startIcon={
-              <Avatar
-                src={currentUser?.avatarUrl}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  background: "linear-gradient(135deg, #a855f7, #3b82f6)"
-                }}
-              />
-            }
+            sx={{ textTransform: "none", color: "#fff", borderRadius: "14px", px: 1, minWidth: 0, gap: 1, "&:hover": { bgcolor: "rgba(255,255,255,0.06)" } }}
+            startIcon={<Avatar src={currentUser?.avatarUrl} sx={{ width: 32, height: 32 }} />}
+            endIcon={<MSym name="keyboard_arrow_down" sx={{ color: "#a1a1aa", fontSize: 18 }} />}
           >
-            <Typography sx={{ fontSize: 14, fontWeight: 600, display: { xs: "none", sm: "block" } }}>
+            <Typography sx={{ fontWeight: 500, fontSize: 14 }}>
               {currentUser?.login || "user"}
             </Typography>
           </Button>

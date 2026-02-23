@@ -17,26 +17,24 @@ export default function IssueTitleSection({ issue, statusP, diffP, copyToClipboa
     <>
       {/* Breadcrumb */}
       <Box sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ color: "#6b7280", fontSize: 13, fontFamily: "monospace", mb: 1.5 }}>
-          <Box component="span">{issue.repoOwner}</Box>
-          <Box sx={{ color: "#374151" }}>/</Box>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ color: "#9aa1ac", opacity: 0.4, fontSize: 16, fontWeight: 300, mb: 1 }}>
           <Box component="span">{issue.repoName}</Box>
           <Box sx={{ color: "#374151" }}>/</Box>
           <Box sx={{ color: "#9ca3af" }}>#{issue.githubNumber}</Box>
         </Stack>
 
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-          <Typography sx={{ color: "#fff", fontSize: { xs: 26, md: 34 }, fontWeight: 800, letterSpacing: -0.6, lineHeight: 1.15 }}>
+          <Typography sx={{ color: "#fff", fontSize: { xs: 22, md: 32 }, fontWeight: 700, letterSpacing: -0.3, lineHeight: 1.2 }}>
             {issue.title}
           </Typography>
 
           <IconButton
             onClick={() => copyToClipboard(window.location.href)}
             sx={{
-              width: 40,
-              height: 40,
+              width: 48,
+              height: 48,
               borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.08)",
+              border: "1px solid #2c312a",
               bgcolor: "#11111a",
               color: "#9ca3af",
               "&:hover": { bgcolor: "#1a1a24", color: "#fff" }
@@ -49,19 +47,19 @@ export default function IssueTitleSection({ issue, statusP, diffP, copyToClipboa
 
       {/* Pills row */}
       <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" sx={{ mb: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 0.75, borderRadius: 999, bgcolor: statusP.bg, border: `1px solid ${statusP.bd}`, color: statusP.fg, fontSize: 11, fontWeight: 800, letterSpacing: 0.9, textTransform: "uppercase" }}>
-          <MSym name={statusP.icon} sx={{ fontSize: 16, color: statusP.fg }} />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 0.75, py: 0.5, borderRadius: "6px", bgcolor: statusP.bg, border: `1px solid ${statusP.bd}`, color: statusP.fg, fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
+          <MSym name={statusP.icon} sx={{ fontSize: 10, color: statusP.fg }} />
           {statusP.text}
         </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 0.75, borderRadius: 999, bgcolor: diffP.bg, border: `1px solid ${diffP.bd}`, color: diffP.fg, fontSize: 11, fontWeight: 800, letterSpacing: 0.9, textTransform: "uppercase" }}>
-          <MSym name={diffP.icon} sx={{ fontSize: 16, color: diffP.fg }} />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 0.75, py: 0.5, borderRadius: "6px", bgcolor: diffP.bg, border: `1px solid ${diffP.bd}`, color: diffP.fg, fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
+          <MSym name={diffP.icon} sx={{ fontSize: 10, color: diffP.fg }} />
           {diffP.text}
         </Box>
 
         {(issue.labels || []).slice(0, 3).map((l) => (
-          <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 0.75, borderRadius: 999, bgcolor: "#11111a", border: "1px solid rgba(255,255,255,0.05)", color: "#d1d5db", fontSize: 13 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: 999, bgcolor: labelColorDot(l) }} />
+          <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 0.75, py: 0.5, borderRadius: "6px", bgcolor: "#11111a", border: "1px solid #2c312a", color: "#d1d5db", fontSize: 8, fontWeight: 600 }}>
+            <Box sx={{ width: 6, height: 6, borderRadius: 999, bgcolor: labelColorDot(l) }} />
             {l}
           </Box>
         ))}

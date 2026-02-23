@@ -1,6 +1,5 @@
 import { Button, Stack } from "@mui/material";
 import MSym from "../../resources/components/MSym";
-import GitHubMark from "../../auth/components/GitHubMark";
 import type { IssueDto } from "../types";
 
 type Props = {
@@ -18,17 +17,18 @@ export default function IssueActions({ issue, copyToClipboard }: Props) {
         href={issue.githubUrl}
         target="_blank"
         rel="noreferrer"
-        startIcon={<GitHubMark />}
+        startIcon={<MSym name="north_east" sx={{ fontSize: 20 }} />}
         sx={{
-          height: 50,
-          borderRadius: "14px",
+          height: 48,
+          borderRadius: "12px",
           justifyContent: "flex-start",
-          px: 2,
-          gap: 1.25,
-          bgcolor: "#101110",
-          border: "1px solid rgba(255,255,255,0.08)",
-          color: "#d1d5db",
-          fontWeight: 900,
+          px: 3,
+          gap: 1,
+          bgcolor: "#11111a",
+          border: "1px solid #2c312a",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: 16,
           textTransform: "none",
           "& .MuiButton-startIcon": { ml: 0 },
           "&:hover": {
@@ -44,17 +44,18 @@ export default function IssueActions({ issue, copyToClipboard }: Props) {
       <Button
         fullWidth
         onClick={() => copyToClipboard(window.location.href)}
-        startIcon={<MSym name="share" sx={{ fontSize: 18 }} />}
+        startIcon={<MSym name="share" sx={{ fontSize: 20 }} />}
         sx={{
-          height: 50,
-          borderRadius: "14px",
+          height: 48,
+          borderRadius: "12px",
           justifyContent: "flex-start",
-          px: 2,
-          gap: 1.25,
-          bgcolor: "#101110",
-          border: "1px solid rgba(255,255,255,0.08)",
-          color: "#d1d5db",
-          fontWeight: 900,
+          px: 3,
+          gap: 1,
+          bgcolor: "#11111a",
+          border: "1px solid #2c312a",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: 16,
           textTransform: "none",
           "& .MuiButton-startIcon": { ml: 0 },
           "&:hover": {
@@ -69,17 +70,18 @@ export default function IssueActions({ issue, copyToClipboard }: Props) {
       {/* Report */}
       <Button
         fullWidth
-        startIcon={<MSym name="report_problem" sx={{ fontSize: 18 }} />}
+        startIcon={<MSym name="error" sx={{ fontSize: 20 }} />}
         sx={{
-          height: 50,
-          borderRadius: "14px",
+          height: 48,
+          borderRadius: "12px",
           justifyContent: "flex-start",
-          px: 2,
-          gap: 1.25,
-          bgcolor: "rgba(239,68,68,0.10)",
-          border: "1px solid rgba(239,68,68,0.35)",
-          color: "#f87171",
-          fontWeight: 900,
+          px: 3,
+          gap: 1,
+          bgcolor: "#310505",
+          border: "1px solid #ff0000",
+          color: "#ff0000",
+          fontWeight: 700,
+          fontSize: 16,
           textTransform: "none",
           "& .MuiButton-startIcon": { ml: 0 },
           "&:hover": {
