@@ -26,3 +26,34 @@ export async function fetchFeed(filters: FeedFilters = {}) {
   });
   return res.data;
 }
+
+export interface RecommendationItem {
+  issue_id: string;
+  repo_name: string;
+  issue_title: string;
+  language: string;
+  difficulty: string;
+  labels: string;
+  topics: string;
+  similarity_score: number;
+  summary?: string;
+}
+
+export interface RecommendationsResponse {
+  recommendations: RecommendationItem[];
+  method: string;
+  userProfile: {
+    languages?: string[];
+    difficulty?: string;
+    topics?: string[];
+  };
+  error?: string;
+}
+
+export async function fetchRecommendations(topN: number = 10) {
+  const res = await api.get<RecommendationsResponse>(
+    `/api/recommendations?top_n=${topN}`,
+    { headers: authHeaders() }
+  );
+  return res.data;
+}

@@ -19,7 +19,7 @@ type CurrentUser = { login?: string; avatarUrl?: string } | null;
 
 const NAV_ITEMS = [
   { label: "Trending Issues", icon: "explore", path: "/feed" },
-  { label: "Good First Issues", icon: "partner_exchange", path: "/feed" },
+  { label: "Good First Issues", icon: "partner_exchange", path: "/good-first-issues" },
   { label: "Learning Resources", icon: "school", path: "/resources" },
   { label: "Community Picks", icon: "local_fire_department", path: "/feed" },
   { label: "Pull Requests", icon: "fork_right", path: "/pr-tracking" }
@@ -30,7 +30,7 @@ export default function AppLayout({
   sidebarExtra,
   children
 }: {
-  activePage: "feed" | "resources" | "pr-tracking" | "pr-detail";
+  activePage: "feed" | "resources" | "pr-tracking" | "pr-detail" | "good-first-issues";
   sidebarExtra?: ReactNode;
   children: ReactNode;
 }) {
@@ -46,6 +46,7 @@ export default function AppLayout({
 
   function isActive(item: typeof NAV_ITEMS[number]) {
     if (item.label === "Trending Issues" && activePage === "feed") return true;
+    if (item.label === "Good First Issues" && activePage === "good-first-issues") return true;
     if (item.label === "Learning Resources" && activePage === "resources") return true;
     if (item.label === "Pull Requests" && (activePage === "pr-tracking" || activePage === "pr-detail")) return true;
     return false;
