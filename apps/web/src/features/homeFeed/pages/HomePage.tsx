@@ -10,12 +10,9 @@ import {
   Close,
   Code,
   ExpandMore,
-  GridView,
   Search,
   Sort,
-  ThumbUpOffAlt,
   Tune,
-  ViewList,
   AutoAwesome
 } from "@mui/icons-material";
 import {
@@ -34,19 +31,10 @@ import {
 
 import AppLayout from "../../../components/layout/AppLayout";
 import MSym from "../../resources/components/MSym";
-import { api, authHeaders } from "../../../lib/api";
 import { useHomeFeed } from "../hooks/useHomeFeed";
+import { useSavedIssues } from "../../../hooks/useSavedIssues";
 import type { IssueRow } from "../types";
 import type { RecommendationItem } from "../api/homeApi";
-
-async function seedAllData(): Promise<{
-  message: string;
-  resources: { inserted: number };
-  prTracking: { inserted: number; ids: string[] };
-}> {
-  const res = await api.post("/api/seed-all", {}, { headers: authHeaders() });
-  return res.data;
-}
 
 const filterChipSx = {
   borderRadius: "14px",
@@ -96,121 +84,106 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-function HomeSidebarExtra() {
-  const [seeding, setSeeding] = useState(false);
-  const [seedMsg, setSeedMsg] = useState<string | null>(null);
+const RECENT_SEARCHES_KEY = "oc_recent_searches";
 
-  const handleSeedAll = async () => {
-    setSeeding(true);
-    setSeedMsg(null);
-    try {
-      const result = await seedAllData();
-      setSeedMsg(
-        `${result.message} — Resources: ${result.resources.inserted}, PRs: ${result.prTracking.inserted}`
-      );
-    } catch (e: any) {
-      setSeedMsg(e?.response?.data?.message || "Failed to seed demo data.");
-    } finally {
-      setSeeding(false);
-    }
-  };
+function loadRecentSearches(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentSearch(query: string) {
+  const searches = loadRecentSearches().filter((s) => s !== query);
+  searches.unshift(query);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(searches.slice(0, 3)));
+}
+
+function HomeSidebarExtra({ onSearch, onFilterLanguage, onFilterDifficulty, activeLanguage, activeDifficulty, onClearFilters }: {
+  onSearch: (query: string) => void;
+  onFilterLanguage: (lang: string | undefined) => void;
+  onFilterDifficulty: (diff: string | undefined) => void;
+  activeLanguage?: string;
+  activeDifficulty?: string;
+  onClearFilters: () => void;
+}) {
+  const [recentSearches, setRecentSearches] = useState<string[]>(loadRecentSearches);
+
+  const LANGUAGE_MAP: Record<string, string> = { "JS": "JavaScript", "Python": "Python", "React": "React", "Rust": "Rust" };
+  const DIFFICULTY_MAP: Record<string, string> = { "Beginner": "beginner", "Intermediate": "intermediate", "Advanced": "advanced" };
 
   return (
     <>
       <Typography sx={{ color: "#a1a1aa", fontWeight: 600, fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase", px: 1, mb: 1.5 }}>
-        Saved Searches
+        Recent Searches
       </Typography>
       <Stack spacing={0.5}>
-        {["React High Priority", "Assigned to Me", "Rust & Help Wanted"].map((item) => (
-          <Button
-            key={item}
-            fullWidth
-            sx={{ textTransform: "none", borderRadius: "14px", justifyContent: "flex-start", px: 1.5, py: 1, gap: 1, color: "#a1a1aa", fontWeight: 500 }}
-          >
-            <MSym name="search" sx={{ fontSize: 17 }} />
-            {item}
-          </Button>
-        ))}
+        {recentSearches.length === 0 ? (
+          <Typography sx={{ fontSize: 12, color: "#52525b", px: 1.5, py: 1 }}>No recent searches.</Typography>
+        ) : (
+          recentSearches.map((item) => (
+            <Button
+              key={item}
+              fullWidth
+              onClick={() => onSearch(item)}
+              sx={{ textTransform: "none", borderRadius: "14px", justifyContent: "flex-start", px: 1.5, py: 1, gap: 1, color: "#a1a1aa", fontWeight: 500 }}
+            >
+              <MSym name="history" sx={{ fontSize: 17 }} />
+              {item}
+            </Button>
+          ))
+        )}
       </Stack>
 
       <Stack direction="row" justifyContent="space-between" sx={{ mt: 3, mb: 1.5 }}>
         <Typography sx={{ fontSize: 12, fontWeight: 600, color: "#a1a1aa", letterSpacing: 0.6, textTransform: "uppercase" }}>
           Filters
         </Typography>
-        <Typography sx={{ fontSize: 10, color: "#19e66b", cursor: "pointer" }}>Clear all</Typography>
+        <Typography sx={{ fontSize: 10, color: "#19e66b", cursor: "pointer" }} onClick={onClearFilters}>Clear all</Typography>
       </Stack>
 
       <Typography sx={{ fontSize: 12, color: "#fff", mb: 1 }}>Languages</Typography>
       <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ mb: 2.5 }}>
-        <Chip
-          icon={<Code sx={{ fontSize: "14px !important", color: "#19e66b !important" }} />}
-          label="JS"
-          sx={{ ...filterChipSx, bgcolor: "rgba(25,230,107,0.1)", borderColor: "rgba(25,230,107,0.2)", color: "#19e66b" }}
-        />
-        {["Python", "React", "Rust"].map((item) => (
-          <Chip key={item} label={item} sx={filterChipSx} />
-        ))}
+        {Object.entries(LANGUAGE_MAP).map(([label, value]) => {
+          const isActive = activeLanguage === value;
+          return (
+            <Chip
+              key={label}
+              icon={label === "JS" ? <Code sx={{ fontSize: "14px !important", color: isActive ? "#19e66b !important" : undefined }} /> : undefined}
+              label={label}
+              onClick={() => onFilterLanguage(isActive ? undefined : value)}
+              sx={isActive
+                ? { ...filterChipSx, bgcolor: "rgba(25,230,107,0.1)", borderColor: "rgba(25,230,107,0.2)", color: "#19e66b", cursor: "pointer" }
+                : { ...filterChipSx, cursor: "pointer" }}
+            />
+          );
+        })}
       </Stack>
 
       <Typography sx={{ fontSize: 12, color: "#fff", mb: 1 }}>Difficulty</Typography>
       <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ mb: 2.5 }}>
-        {["Beginner", "Intermediate", "Advanced"].map((item) => (
-          <Chip key={item} label={item} sx={filterChipSx} />
-        ))}
+        {Object.entries(DIFFICULTY_MAP).map(([label, value]) => {
+          const isActive = activeDifficulty === value;
+          return (
+            <Chip
+              key={label}
+              label={label}
+              onClick={() => onFilterDifficulty(isActive ? undefined : value)}
+              sx={isActive
+                ? { ...filterChipSx, bgcolor: "rgba(25,230,107,0.1)", borderColor: "rgba(25,230,107,0.2)", color: "#19e66b", cursor: "pointer" }
+                : { ...filterChipSx, cursor: "pointer" }}
+            />
+          );
+        })}
       </Stack>
 
-      <Divider sx={{ borderColor: "#27272a", my: 2 }} />
-      <Button
-        fullWidth
-        sx={{ textTransform: "none", justifyContent: "space-between", color: "#a1a1aa", borderRadius: "14px", px: 1.5, py: 1 }}
-      >
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Bookmark sx={{ fontSize: 20 }} />
-          <Typography sx={{ fontSize: 14, fontWeight: 500 }}>Saved Issues</Typography>
-        </Stack>
-        <Box sx={{ px: 0.8, borderRadius: "8px", bgcolor: "rgba(39,39,42,0.5)", fontFamily: "monospace", fontSize: 12 }}>
-          12
-        </Box>
-      </Button>
-
-      <Divider sx={{ borderColor: "#27272a", my: 2 }} />
-      <Button
-        fullWidth
-        onClick={handleSeedAll}
-        disabled={seeding}
-        sx={{
-          textTransform: "none",
-          borderRadius: "14px",
-          px: 1.5,
-          py: 1.2,
-          gap: 1,
-          bgcolor: "rgba(25,230,107,0.1)",
-          border: "1px solid rgba(25,230,107,0.25)",
-          color: "#19e66b",
-          fontWeight: 600,
-          "&:hover": { bgcolor: "rgba(25,230,107,0.18)" },
-          "&.Mui-disabled": { color: "rgba(25,230,107,0.5)", bgcolor: "rgba(25,230,107,0.05)" }
-        }}
-      >
-        {seeding ? (
-          <CircularProgress size={16} sx={{ color: "#19e66b" }} />
-        ) : (
-          <MSym name="auto_awesome" sx={{ fontSize: 18 }} />
-        )}
-        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-          {seeding ? "Seeding..." : "Seed All Demo Data"}
-        </Typography>
-      </Button>
-      {seedMsg && (
-        <Typography sx={{ mt: 1, color: "#19e66b", fontSize: 11, px: 0.5 }}>
-          {seedMsg}
-        </Typography>
-      )}
     </>
   );
 }
 
-function IssueCard({ issue }: { issue: IssueRow }) {
+function IssueCard({ issue, isSaved, onToggleSave }: { issue: IssueRow; isSaved?: boolean; onToggleSave?: (id: string, meta?: { title: string; repoOwner: string; repoName: string }) => void }) {
   const navigate = useNavigate();
   const isClaimed = issue.status === "claimed";
   const isClosed = issue.status === "closed";
@@ -282,57 +255,66 @@ function IssueCard({ issue }: { issue: IssueRow }) {
                 />
               )}
             </Stack>
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
               <Stack direction="row" spacing={0.7} alignItems="center">
                 <ChatBubbleOutline sx={{ fontSize: 16, color: "#a1a1aa" }} />
                 <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>
-                  {issue.requiredSkills?.length || 0}
+                  {issue.commentsCount ?? 0}
                 </Typography>
               </Stack>
-              <Stack direction="row" spacing={0.7} alignItems="center">
-                <ThumbUpOffAlt sx={{ fontSize: 16, color: "#a1a1aa" }} />
-                <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>
-                  {issue.labels?.length || 0}
-                </Typography>
-              </Stack>
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSave?.(issue._id, { title: issue.title, repoOwner: issue.repoOwner, repoName: issue.repoName });
+                }}
+                sx={{
+                  color: isSaved ? "#19e66b" : "#a1a1aa",
+                  p: 0.5,
+                  "&:hover": { bgcolor: "rgba(25,230,107,0.1)" }
+                }}
+              >
+                {isSaved ? <Bookmark sx={{ fontSize: 18 }} /> : <BookmarkAdd sx={{ fontSize: 18 }} />}
+              </IconButton>
             </Stack>
           </Stack>
         </Box>
-        <Button
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/issues/${issue._id}`);
-          }}
-          sx={
-            ctaPrimary
-              ? {
-                  minHeight: 36,
-                  textTransform: "none",
-                  borderRadius: "14px",
-                  px: 2,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  bgcolor: "#19e66b",
-                  color: "#000",
-                  boxShadow: "0 0 10px rgba(25,230,107,0.2)",
-                  whiteSpace: "nowrap"
-                }
-              : {
-                  minHeight: 36,
-                  textTransform: "none",
-                  borderRadius: "14px",
-                  px: 2,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  border: "1px solid #27272a",
-                  color: isClosed ? "#a1a1aa" : "#fff",
-                  bgcolor: "#0b0f17",
-                  whiteSpace: "nowrap"
-                }
-          }
-        >
-          {cta}
-        </Button>
+        <Stack spacing={1} alignItems="center">
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/issues/${issue._id}`);
+            }}
+            sx={
+              ctaPrimary
+                ? {
+                    minHeight: 36,
+                    textTransform: "none",
+                    borderRadius: "14px",
+                    px: 2,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    bgcolor: "#19e66b",
+                    color: "#000",
+                    boxShadow: "0 0 10px rgba(25,230,107,0.2)",
+                    whiteSpace: "nowrap"
+                  }
+                : {
+                    minHeight: 36,
+                    textTransform: "none",
+                    borderRadius: "14px",
+                    px: 2,
+                    fontSize: 14,
+                    fontWeight: 500,
+                    border: "1px solid #27272a",
+                    color: isClosed ? "#a1a1aa" : "#fff",
+                    bgcolor: "#0b0f17",
+                    whiteSpace: "nowrap"
+                  }
+            }
+          >
+            {cta}
+          </Button>
+        </Stack>
       </Stack>
       {isClaimed && (
         <Box
@@ -357,7 +339,7 @@ function IssueCard({ issue }: { issue: IssueRow }) {
   );
 }
 
-function RecommendationCard({ recommendation }: { recommendation: RecommendationItem }) {
+function RecommendationCard({ recommendation, isSaved, onToggleSave }: { recommendation: RecommendationItem; isSaved?: boolean; onToggleSave?: (id: string, meta?: { title: string; repoOwner: string; repoName: string }) => void }) {
   const navigate = useNavigate();
 
   // Parse labels string to array
@@ -391,7 +373,7 @@ function RecommendationCard({ recommendation }: { recommendation: Recommendation
             {recommendation.issue_title}
           </Typography>
           <Typography sx={{ fontSize: 14, color: "#a1a1aa", lineHeight: "22px", mb: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-            {recommendation.summary || ""}
+            {recommendation.summary || recommendation.body?.slice(0, 200) || `A ${recommendation.difficulty} level ${recommendation.language} issue with topics: ${recommendation.topics || "general"}`}
           </Typography>
 
           <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
@@ -429,48 +411,90 @@ function RecommendationCard({ recommendation }: { recommendation: Recommendation
                 }}
               />
             </Stack>
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
               <Stack direction="row" spacing={0.7} alignItems="center">
                 <ChatBubbleOutline sx={{ fontSize: 16, color: "#a1a1aa" }} />
                 <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>
                   {labelsArray.length}
                 </Typography>
               </Stack>
-              <Stack direction="row" spacing={0.7} alignItems="center">
-                <ThumbUpOffAlt sx={{ fontSize: 16, color: "#a1a1aa" }} />
-                <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>
-                  {Math.round(recommendation.similarity_score * 100)}%
-                </Typography>
-              </Stack>
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const parts = recommendation.repo_name.split("/");
+                  onToggleSave?.(recommendation.issue_id, {
+                    title: recommendation.issue_title,
+                    repoOwner: parts[0] || "",
+                    repoName: parts[1] || recommendation.repo_name
+                  });
+                }}
+                sx={{
+                  color: isSaved ? "#19e66b" : "#a1a1aa",
+                  p: 0.5,
+                  "&:hover": { bgcolor: "rgba(25,230,107,0.1)" }
+                }}
+              >
+                {isSaved ? <Bookmark sx={{ fontSize: 18 }} /> : <BookmarkAdd sx={{ fontSize: 18 }} />}
+              </IconButton>
             </Stack>
           </Stack>
         </Box>
-        <Button
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/issues/${recommendation.issue_id}`);
-          }}
+        <Stack spacing={1} alignItems="center">
+          {/* Match score */}
+          <Typography sx={{ fontSize: 20, fontWeight: 800, color: "#c084fc", lineHeight: 1 }}>
+            {Math.round(recommendation.similarity_score * 100)}%
+          </Typography>
+          <Typography sx={{ fontSize: 10, fontWeight: 600, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            match
+          </Typography>
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/issues/${recommendation.issue_id}`);
+            }}
+            sx={{
+              minHeight: 36,
+              textTransform: "none",
+              borderRadius: "14px",
+              px: 2,
+              fontSize: 14,
+              fontWeight: 600,
+              bgcolor: "#19e66b",
+              color: "#000",
+              boxShadow: "0 0 10px rgba(25,230,107,0.2)",
+              whiteSpace: "nowrap"
+            }}
+          >
+            View Details
+          </Button>
+        </Stack>
+      </Stack>
+      {recommendation.claimed_by && (
+        <Box
           sx={{
-            minHeight: 36,
-            textTransform: "none",
-            borderRadius: "14px",
-            px: 2,
-            fontSize: 14,
-            fontWeight: 600,
-            bgcolor: "#19e66b",
-            color: "#000",
-            boxShadow: "0 0 10px rgba(25,230,107,0.2)",
-            whiteSpace: "nowrap"
+            position: "absolute",
+            top: -10,
+            right: -8,
+            px: 1.2,
+            py: 0.2,
+            borderRadius: "999px",
+            border: "1px solid rgba(168,85,247,0.3)",
+            bgcolor: "rgba(168,85,247,0.2)",
+            backdropFilter: "blur(6px)"
           }}
         >
-          View Details
-        </Button>
-      </Stack>
+          <Typography sx={{ fontSize: 10, color: "#d8b4fe", fontWeight: 700, letterSpacing: "0.025em", textTransform: "uppercase" }}>
+            Claimed by {recommendation.claimed_by}
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 }
 
 export default function HomePage() {
+  const navigate = useNavigate();
+  const { isSaved, toggleSave, savedCount, saved } = useSavedIssues();
   const {
     issues,
     pagination,
@@ -483,13 +507,21 @@ export default function HomePage() {
     recommendations,
     recommendationsLoading,
     useRecommendations,
-    toggleRecommendations
+    toggleRecommendations,
+    showAllIssues
   } = useHomeFeed();
 
   const [searchInput, setSearchInput] = useState("");
   const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // For You filtering state
+  const [recSearch, setRecSearch] = useState("");
+  const [recSort, setRecSort] = useState<"newest" | "score">("score");
+  const [recDifficultyFilter, setRecDifficultyFilter] = useState<string | undefined>(undefined);
+  const [recFilterAnchor, setRecFilterAnchor] = useState<null | HTMLElement>(null);
+  const [recSortAnchor, setRecSortAnchor] = useState<null | HTMLElement>(null);
 
   // Debounced search - triggers search as user types
   useEffect(() => {
@@ -508,7 +540,27 @@ export default function HomePage() {
 
   const handleSearch = () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (searchInput.trim()) {
+      saveRecentSearch(searchInput.trim());
+    }
     updateFilters({ search: searchInput || undefined, page: 1 });
+  };
+
+  const handleSidebarSearch = (query: string) => {
+    setSearchInput(query);
+    updateFilters({ search: query, page: 1 });
+  };
+
+  const handleSidebarLanguage = (lang: string | undefined) => {
+    updateFilters({ language: lang, page: 1 });
+  };
+
+  const handleSidebarDifficulty = (diff: string | undefined) => {
+    updateFilters({ difficulty: diff, page: 1 });
+  };
+
+  const handleClearSidebarFilters = () => {
+    updateFilters({ language: undefined, difficulty: undefined, page: 1 });
   };
 
   // Filter options
@@ -544,11 +596,28 @@ export default function HomePage() {
   const hasActiveFilters = filters.search || filters.status || filters.language || filters.difficulty;
 
   // Show ML recommendations or regular issues
-  const showingRecommendations = useRecommendations && recommendations.length > 0;
+  const showingRecommendations = useRecommendations;
   const isLoading = showingRecommendations ? recommendationsLoading : issuesLoading;
 
+  // Filter recommendations client-side
+  const filteredRecommendations = recommendations.filter((rec) => {
+    if (recSearch) {
+      const q = recSearch.toLowerCase();
+      const matchesTitle = rec.issue_title.toLowerCase().includes(q);
+      const matchesRepo = rec.repo_name.toLowerCase().includes(q);
+      const matchesLabels = rec.labels?.toLowerCase().includes(q);
+      const matchesTopics = rec.topics?.toLowerCase().includes(q);
+      if (!matchesTitle && !matchesRepo && !matchesLabels && !matchesTopics) return false;
+    }
+    if (recDifficultyFilter && rec.difficulty !== recDifficultyFilter) return false;
+    return true;
+  }).sort((a, b) => {
+    if (recSort === "score") return b.similarity_score - a.similarity_score;
+    return 0; // "newest" keeps original order
+  });
+
   return (
-    <AppLayout activePage="feed" sidebarExtra={<HomeSidebarExtra />}>
+    <AppLayout activePage="feed" sidebarExtra={<HomeSidebarExtra onSearch={handleSidebarSearch} onFilterLanguage={handleSidebarLanguage} onFilterDifficulty={handleSidebarDifficulty} activeLanguage={filters.language} activeDifficulty={filters.difficulty} onClearFilters={handleClearSidebarFilters} />}>
       <Box sx={{ maxWidth: 1152, mx: "auto", px: 3, py: 5 }}>
         <Typography sx={{ fontSize: 42, lineHeight: "48px", fontWeight: 700, letterSpacing: -0.8 }}>
           Your Issue Feed
@@ -560,7 +629,7 @@ export default function HomePage() {
         {/* Feed Mode Toggle */}
         <Stack direction="row" spacing={1} sx={{ mt: 3, mb: 2 }}>
           <Button
-            onClick={() => { if (useRecommendations) toggleRecommendations(); }}
+            onClick={showAllIssues}
             sx={{
               textTransform: "none",
               borderRadius: "14px",
@@ -763,7 +832,37 @@ export default function HomePage() {
                 )}
               </Menu>
 
-              <Button sx={toolbarButtonSx} startIcon={<BookmarkAdd sx={{ fontSize: 18 }} />}>Save</Button>
+              <Button
+                sx={{
+                  ...toolbarButtonSx,
+                  ...(savedCount > 0 ? {
+                    bgcolor: "rgba(25,230,107,0.1)",
+                    borderColor: "rgba(25,230,107,0.3)",
+                    color: "#19e66b"
+                  } : {})
+                }}
+                startIcon={savedCount > 0 ? <Bookmark sx={{ fontSize: 18 }} /> : <BookmarkAdd sx={{ fontSize: 18 }} />}
+                onClick={() => navigate("/saved")}
+              >
+                Saved
+                {savedCount > 0 && (
+                  <Box
+                    component="span"
+                    sx={{
+                      ml: 0.5,
+                      px: 0.6,
+                      py: 0.1,
+                      borderRadius: "4px",
+                      bgcolor: "rgba(25,230,107,0.25)",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "#19e66b"
+                    }}
+                  >
+                    {savedCount}
+                  </Box>
+                )}
+              </Button>
 
               <Button
                 sx={toolbarButtonSx}
@@ -803,14 +902,6 @@ export default function HomePage() {
                 ))}
               </Menu>
 
-              <Stack direction="row" spacing={0.5} sx={{ bgcolor: "#0b0f17", border: "1px solid #27272a", borderRadius: "14px", p: 0.7 }}>
-                <IconButton sx={{ width: 30, height: 30, borderRadius: "6px", bgcolor: "rgba(11,15,23,0.8)", color: "#fff" }}>
-                  <ViewList sx={{ fontSize: 20 }} />
-                </IconButton>
-                <IconButton sx={{ width: 30, height: 30, borderRadius: "6px", color: "#a1a1aa" }}>
-                  <GridView sx={{ fontSize: 20 }} />
-                </IconButton>
-              </Stack>
             </Stack>
           </Stack>
         )}
@@ -856,16 +947,235 @@ export default function HomePage() {
           </Stack>
         )}
 
-        {/* For You Header */}
+        {/* For You Search, Filters, Sort */}
         {showingRecommendations && (
-          <Box sx={{ mb: 2.5 }}>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <AutoAwesome sx={{ color: "#c084fc", fontSize: 20 }} />
-              <Typography sx={{ color: "#c084fc", fontSize: 14, fontWeight: 600 }}>
-                Personalized recommendations based on your preferences
-              </Typography>
+          <>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ mb: 2.2 }}>
+              <Box
+                sx={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  bgcolor: "#0b0f17",
+                  border: "1px solid #27272a",
+                  borderRadius: "16px",
+                  px: 1.5,
+                  py: 0.7
+                }}
+              >
+                <Search sx={{ color: "#a1a1aa", fontSize: 20 }} />
+                <InputBase
+                  fullWidth
+                  value={recSearch}
+                  onChange={(e) => setRecSearch(e.target.value)}
+                  placeholder="Search recommendations..."
+                  sx={{ color: "#fff", fontSize: 14, "& input::placeholder": { color: "#a1a1aa" } }}
+                />
+                {recSearch && (
+                  <IconButton
+                    size="small"
+                    onClick={() => setRecSearch("")}
+                    sx={{ color: "#a1a1aa", p: 0.5 }}
+                  >
+                    <Close sx={{ fontSize: 16 }} />
+                  </IconButton>
+                )}
+              </Box>
+
+              <Stack direction="row" spacing={1}>
+                <Button
+                  sx={{
+                    ...toolbarButtonSx,
+                    ...(recDifficultyFilter ? {
+                      bgcolor: "rgba(168,85,247,0.1)",
+                      borderColor: "rgba(168,85,247,0.3)",
+                      color: "#c084fc"
+                    } : {})
+                  }}
+                  startIcon={<Tune sx={{ fontSize: 18 }} />}
+                  endIcon={<ExpandMore sx={{ fontSize: 18, color: "#a1a1aa" }} />}
+                  onClick={(e) => setRecFilterAnchor(e.currentTarget)}
+                >
+                  Filters
+                  {recDifficultyFilter && (
+                    <Box
+                      component="span"
+                      sx={{
+                        ml: 0.5,
+                        px: 0.6,
+                        py: 0.1,
+                        borderRadius: "4px",
+                        bgcolor: "rgba(168,85,247,0.2)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: "#c084fc"
+                      }}
+                    >
+                      1
+                    </Box>
+                  )}
+                </Button>
+                <Menu
+                  anchorEl={recFilterAnchor}
+                  open={Boolean(recFilterAnchor)}
+                  onClose={() => setRecFilterAnchor(null)}
+                  PaperProps={{
+                    sx: {
+                      bgcolor: "#0b0f17",
+                      border: "1px solid #27272a",
+                      borderRadius: "12px",
+                      minWidth: 180,
+                      mt: 1
+                    }
+                  }}
+                >
+                  <Typography sx={{ px: 2, py: 1, fontSize: 11, fontWeight: 600, color: "#71717a", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Difficulty
+                  </Typography>
+                  {[
+                    { value: undefined, label: "All Difficulties" },
+                    { value: "beginner", label: "Beginner" },
+                    { value: "intermediate", label: "Intermediate" },
+                    { value: "advanced", label: "Advanced" }
+                  ].map((opt) => (
+                    <MenuItem
+                      key={opt.label}
+                      onClick={() => { setRecDifficultyFilter(opt.value); setRecFilterAnchor(null); }}
+                      sx={{
+                        fontSize: 14,
+                        color: recDifficultyFilter === opt.value ? "#c084fc" : "#fff",
+                        bgcolor: recDifficultyFilter === opt.value ? "rgba(168,85,247,0.1)" : "transparent",
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" }
+                      }}
+                    >
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                  {recDifficultyFilter && (
+                    <>
+                      <Divider sx={{ borderColor: "#27272a", my: 1 }} />
+                      <MenuItem
+                        onClick={() => { setRecDifficultyFilter(undefined); setRecFilterAnchor(null); }}
+                        sx={{ fontSize: 14, color: "#f87171", "&:hover": { bgcolor: "rgba(248,113,113,0.1)" } }}
+                      >
+                        Clear Filter
+                      </MenuItem>
+                    </>
+                  )}
+                </Menu>
+
+                <Button
+                  sx={{
+                    ...toolbarButtonSx,
+                    ...(savedCount > 0 ? {
+                      bgcolor: "rgba(25,230,107,0.1)",
+                      borderColor: "rgba(25,230,107,0.3)",
+                      color: "#19e66b"
+                    } : {})
+                  }}
+                  startIcon={savedCount > 0 ? <Bookmark sx={{ fontSize: 18 }} /> : <BookmarkAdd sx={{ fontSize: 18 }} />}
+                  onClick={() => navigate("/saved")}
+                >
+                  Saved
+                  {savedCount > 0 && (
+                    <Box
+                      component="span"
+                      sx={{
+                        ml: 0.5,
+                        px: 0.6,
+                        py: 0.1,
+                        borderRadius: "4px",
+                        bgcolor: "rgba(25,230,107,0.25)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: "#19e66b"
+                      }}
+                    >
+                      {savedCount}
+                    </Box>
+                  )}
+                </Button>
+
+                <Button
+                  sx={toolbarButtonSx}
+                  startIcon={<Sort sx={{ fontSize: 18 }} />}
+                  endIcon={<ExpandMore sx={{ fontSize: 18, color: "#a1a1aa" }} />}
+                  onClick={(e) => setRecSortAnchor(e.currentTarget)}
+                >
+                  {recSort === "score" ? "Best Match" : "Newest"}
+                </Button>
+                <Menu
+                  anchorEl={recSortAnchor}
+                  open={Boolean(recSortAnchor)}
+                  onClose={() => setRecSortAnchor(null)}
+                  PaperProps={{
+                    sx: {
+                      bgcolor: "#0b0f17",
+                      border: "1px solid #27272a",
+                      borderRadius: "12px",
+                      minWidth: 160,
+                      mt: 1
+                    }
+                  }}
+                >
+                  {[
+                    { value: "score" as const, label: "Best Match" },
+                    { value: "newest" as const, label: "Newest" }
+                  ].map((opt) => (
+                    <MenuItem
+                      key={opt.value}
+                      onClick={() => { setRecSort(opt.value); setRecSortAnchor(null); }}
+                      sx={{
+                        fontSize: 14,
+                        color: recSort === opt.value ? "#c084fc" : "#fff",
+                        bgcolor: recSort === opt.value ? "rgba(168,85,247,0.1)" : "transparent",
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" }
+                      }}
+                    >
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </Stack>
             </Stack>
-          </Box>
+
+            {/* Active filter chips for For You */}
+            {(recSearch || recDifficultyFilter) && (
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 2.2 }}>
+                <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Active:</Typography>
+                {recSearch && (
+                  <Chip
+                    label={`search: ${recSearch}`}
+                    onDelete={() => setRecSearch("")}
+                    sx={{ height: 26, borderRadius: "6px", bgcolor: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)", color: "#c084fc", ".MuiChip-deleteIcon": { color: "rgba(192,132,252,0.7)", fontSize: 16 } }}
+                  />
+                )}
+                {recDifficultyFilter && (
+                  <Chip
+                    label={`difficulty: ${recDifficultyFilter}`}
+                    onDelete={() => setRecDifficultyFilter(undefined)}
+                    sx={{ height: 26, borderRadius: "6px", bgcolor: "rgba(45,212,191,0.1)", border: "1px solid rgba(45,212,191,0.2)", color: "#2dd4bf", ".MuiChip-deleteIcon": { color: "rgba(45,212,191,0.7)", fontSize: 16 } }}
+                  />
+                )}
+                <Typography
+                  sx={{ fontSize: 12, color: "#a1a1aa", cursor: "pointer", "&:hover": { color: "#fff" } }}
+                  onClick={() => { setRecSearch(""); setRecDifficultyFilter(undefined); }}
+                >
+                  Clear all
+                </Typography>
+              </Stack>
+            )}
+
+            <Box sx={{ mb: 2.5 }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <AutoAwesome sx={{ color: "#c084fc", fontSize: 20 }} />
+                <Typography sx={{ color: "#c084fc", fontSize: 14, fontWeight: 600 }}>
+                  Personalized recommendations based on your preferences
+                </Typography>
+              </Stack>
+            </Box>
+          </>
         )}
 
         {/* ─── Feed content ─── */}
@@ -879,18 +1189,24 @@ export default function HomePage() {
             <Button onClick={loadIssues} sx={{ textTransform: "none", color: "#19e66b" }}>Retry</Button>
           </Box>
         ) : showingRecommendations ? (
-          recommendations.length === 0 ? (
+          filteredRecommendations.length === 0 ? (
             <Box sx={{ textAlign: "center", py: 8 }}>
               <MSym name="auto_awesome" sx={{ fontSize: 48, color: "#27272a", mb: 2 }} />
-              <Typography sx={{ color: "#a1a1aa", fontSize: 16 }}>No recommendations yet.</Typography>
+              <Typography sx={{ color: "#a1a1aa", fontSize: 16 }}>
+                {recSearch || recDifficultyFilter
+                  ? "No recommendations match your filters."
+                  : "We couldn't find any good matches for your selections."}
+              </Typography>
               <Typography sx={{ color: "#52525b", fontSize: 14, mt: 0.5 }}>
-                Update your preferences in settings to get personalized recommendations.
+                {recSearch || recDifficultyFilter
+                  ? "Try adjusting your search or filters."
+                  : "Try updating your preferences in settings to broaden your interests."}
               </Typography>
             </Box>
           ) : (
             <Stack spacing={2}>
-              {recommendations.map((rec, idx) => (
-                <RecommendationCard key={rec.issue_id || idx} recommendation={rec} />
+              {filteredRecommendations.map((rec, idx) => (
+                <RecommendationCard key={rec.issue_id || idx} recommendation={rec} isSaved={isSaved(rec.issue_id)} onToggleSave={toggleSave} />
               ))}
             </Stack>
           )
@@ -899,19 +1215,19 @@ export default function HomePage() {
             <MSym name="inbox" sx={{ fontSize: 48, color: "#27272a", mb: 2 }} />
             <Typography sx={{ color: "#a1a1aa", fontSize: 16 }}>No issues found.</Typography>
             <Typography sx={{ color: "#52525b", fontSize: 14, mt: 0.5 }}>
-              Try adjusting your filters or seed some demo data from the sidebar.
+              Try adjusting your filters or search terms.
             </Typography>
           </Box>
         ) : (
           <Stack spacing={2}>
             {issues.map((issue) => (
-              <IssueCard key={issue._id} issue={issue} />
+              <IssueCard key={issue._id} issue={issue} isSaved={isSaved(issue._id)} onToggleSave={toggleSave} />
             ))}
           </Stack>
         )}
 
         {/* ─── Pagination ─── */}
-        {pagination && pagination.totalPages > 1 && (
+        {pagination && pagination.totalPages > 1 && !showingRecommendations && (
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 3.2, pt: 3, borderTop: "1px solid #27272a" }}>
             <Button
               sx={pageButtonSx}
@@ -979,7 +1295,11 @@ export default function HomePage() {
         )}
 
         <Typography sx={{ mt: 4, color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
-          {pagination ? `Showing ${issues.length} of ${pagination.total} issues` : ""}
+          {showingRecommendations
+            ? `Showing ${filteredRecommendations.length} of ${recommendations.length} recommendations`
+            : pagination
+              ? `Showing ${issues.length} of ${pagination.total} issues`
+              : ""}
         </Typography>
       </Box>
     </AppLayout>

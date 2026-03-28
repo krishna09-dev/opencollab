@@ -90,3 +90,26 @@ export interface NotificationDto {
   createdAt: string;
   read: boolean;
 }
+
+export type PrTrackingStatus = "PR_OPEN" | "MERGED" | "CLOSED";
+
+export interface PrTrackingDto {
+  _id: string;
+  userId: string;
+  issueId?: string | null;
+  repoFullName: string;
+  prNumber?: number | null;
+  prTitle?: string | null;
+  prUrl?: string | null;
+  prState?: "open" | "closed" | null;
+  status: string;
+  additions?: number;
+  deletions?: number;
+  changedFiles?: number;
+  createdAtGithub?: string | null;
+  updatedAtGithub?: string | null;
+  mergedAtGithub?: string | null;
+  lastSyncAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}

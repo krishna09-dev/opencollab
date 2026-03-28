@@ -401,3 +401,16 @@ export async function seedDemoPrTracking(): Promise<{ message: string; inserted:
   );
   return res.data;
 }
+
+/**
+ * Add a PR by URL
+ * Backend: POST /api/pr-tracking/add
+ */
+export async function addPrByUrl(prUrl: string): Promise<{ message: string; item: any; created: boolean }> {
+  const res = await api.post<{ message: string; item: any }>(
+    "/api/pr-tracking/add",
+    { prUrl },
+    { headers: authHeaders() }
+  );
+  return { ...res.data, created: res.status === 201 };
+}

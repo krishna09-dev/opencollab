@@ -187,15 +187,6 @@ export async function fetchResources(filters: ResourceFilterState): Promise<{
   return { featured: finalFeatured, items: finalItems, total: res.data.total ?? finalItems.length };
 }
 
-export async function seedResources(): Promise<{ message: string; inserted: number }> {
-  const res = await api.post<{ message: string; inserted: number }>(
-    "/api/resources/seed",
-    {},
-    { headers: authHeaders() }
-  );
-  return res.data;
-}
-
 export type SuggestResourceInput = {
   title: string;
   url: string;

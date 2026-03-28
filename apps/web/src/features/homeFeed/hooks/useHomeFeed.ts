@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchMe, fetchIssueStats, fetchFeed, fetchRecommendations } from "../api/homeApi";
+import { fetchPrList, manualRefreshAll } from "../../prTracking/api/prTrackingApi";
 import type { RecommendationItem } from "../api/homeApi";
 import type { IssueStatsResponse, IssueRow, FeedPagination, FeedFilters } from "../types";
+import type { PrTrackingItem, PrSummary } from "../../prTracking/types";
 
 export function useHomeFeed() {
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,14 @@ export function useHomeFeed() {
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [useRecommendations, setUseRecommendations] = useState(false);
 
+  // PR Tracking
+  const [prItems, setPrItems] = useState<PrTrackingItem[]>([]);
+  const [prSummary, setPrSummary] = useState<PrSummary | null>(null);
+  const [prLoading, setPrLoading] = useState(false);
+  const [prError, setPrError] = useState<string | null>(null);
+  const [usePrFeed, setUsePrFeed] = useState(false);
+  const [prRefreshing, setPrRefreshing] = useState(false);
+
   const navigate = useNavigate();
 
   const loadRecommendations = useCallback(async () => {
@@ -36,6 +46,34 @@ export function useHomeFeed() {
       setRecommendationsLoading(false);
     }
   }, []);
+
+  const loadPrs = useCallback(async () => {
+    setPrLoading(true);
+    setPrError(null);
+    try {
+      const data = await fetchPrList({ q: "", status: "All", repo: "All" });
+      setPrItems(data.items);
+      setPrSummary(data.summary);
+    } catch (err: any) {
+      console.error("Failed to load PRs:", err);
+      setPrError(err?.response?.data?.message || "Failed to load PRs");
+      setPrItems([]);
+    } finally {
+      setPrLoading(false);
+    }
+  }, []);
+
+  const refreshPrs = useCallback(async () => {
+    setPrRefreshing(true);
+    try {
+      await manualRefreshAll();
+      await loadPrs();
+    } catch (err: any) {
+      console.error("Failed to refresh PRs:", err);
+    } finally {
+      setPrRefreshing(false);
+    }
+  }, [loadPrs]);
 
   const loadIssues = useCallback(async (f: FeedFilters = filters) => {
     setIssuesLoading(true);
@@ -76,10 +114,11 @@ export function useHomeFeed() {
           // ignore
         }
 
-        // Load both issues and recommendations
+        // Load issues, recommendations, and PRs
         await Promise.all([
           loadIssues(),
-          loadRecommendations()
+          loadRecommendations(),
+          loadPrs()
         ]);
       } catch (err) {
         console.error(err);
@@ -102,7 +141,8 @@ export function useHomeFeed() {
   const updateFilters = useCallback((newFilters: Partial<FeedFilters>) => {
     const merged = { ...filters, ...newFilters };
     setFilters(merged);
-    setUseRecommendations(false); // Switch back to regular feed when filtering
+    setUseRecommendations(false);
+    setUsePrFeed(false);
     loadIssues(merged);
   }, [filters, loadIssues]);
 
@@ -112,6 +152,17 @@ export function useHomeFeed() {
 
   const toggleRecommendations = useCallback(() => {
     setUseRecommendations((prev) => !prev);
+    setUsePrFeed(false);
+  }, []);
+
+  const togglePrFeed = useCallback(() => {
+    setUsePrFeed(true);
+    setUseRecommendations(false);
+  }, []);
+
+  const showAllIssues = useCallback(() => {
+    setUseRecommendations(false);
+    setUsePrFeed(false);
   }, []);
 
   const headline = isNewUser
@@ -135,6 +186,17 @@ export function useHomeFeed() {
     recommendationsLoading,
     useRecommendations,
     toggleRecommendations,
-    loadRecommendations
+    loadRecommendations,
+    // PR Tracking
+    prItems,
+    prSummary,
+    prLoading,
+    prError,
+    usePrFeed,
+    prRefreshing,
+    togglePrFeed,
+    showAllIssues,
+    refreshPrs,
+    loadPrs
   };
 }

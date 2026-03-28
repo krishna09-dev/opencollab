@@ -37,6 +37,8 @@ export interface RecommendationItem {
   topics: string;
   similarity_score: number;
   summary?: string;
+  body?: string;
+  claimed_by?: string;
 }
 
 export interface RecommendationsResponse {

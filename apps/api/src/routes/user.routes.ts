@@ -1,6 +1,8 @@
 // apps/api/src/routes/user.routes.ts
 import { Router, Response } from "express";
 import { AuthRequest, authRequired } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { updatePreferencesSchema } from "../validators/user.validator";
 import { User } from "../models/User";
 
 const router = Router();
@@ -28,20 +30,21 @@ router.get("/me", authRequired, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// PUT /api/me/preferences  (onboarding)
+// PUT /api/me/preferences (onboarding)
 router.put(
   "/me/preferences",
   authRequired,
+  validate(updatePreferencesSchema),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { preferredLanguages, experienceLevel, areasOfInterest } = req.body;
+      const { preferredLanguages, experienceLevel, areasOfInterest } = req.validated!.body;
 
       const user = await User.findByIdAndUpdate(
         req.userId,
         {
-          preferredLanguages: preferredLanguages || [],
-          experienceLevel: experienceLevel || "beginner",
-          areasOfInterest: areasOfInterest || []
+          preferredLanguages,
+          experienceLevel,
+          areasOfInterest
         },
         { new: true }
       ).select("-__v");

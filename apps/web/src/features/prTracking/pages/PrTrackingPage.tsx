@@ -4,17 +4,22 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   IconButton,
   InputBase,
   Menu,
   MenuItem,
   Paper,
   Stack,
+  TextField,
   Typography
 } from "@mui/material";
 
 import MSym from "../../resources/components/MSym";
 import { usePrTracking } from "../hooks/usePrTracking";
+import { addPrByUrl, manualRefreshAll } from "../api/prTrackingApi";
 import AppLayout from "../../../components/layout/AppLayout";
 import type { PrDisplayStatus, PrFilterState, PrTrackingItem } from "../types";
 
@@ -60,29 +65,6 @@ function parseRelative(relative?: string): string {
   return text;
 }
 
-function PrSidebarExtra({ repos }: { repos: string[] }) {
-  const projects = repos.filter((r) => r !== "All").slice(0, 2);
-
-  return (
-    <>
-      <Typography sx={{ color: "#a1a1aa", fontWeight: 600, fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase", px: 1, mb: 1 }}>
-        Projects
-      </Typography>
-      <Stack spacing={0.5}>
-        {(projects.length ? projects : ["facebook/react", "vercel/next.js"]).map((project) => (
-          <Button
-            key={project}
-            fullWidth
-            sx={{ justifyContent: "flex-start", textTransform: "none", borderRadius: "14px", px: 1.5, py: 1, color: "#a1a1aa", fontWeight: 500, gap: 1 }}
-          >
-            <MSym name="folder" sx={{ fontSize: 17 }} />
-            {project}
-          </Button>
-        ))}
-      </Stack>
-    </>
-  );
-}
 
 export default function PrTrackingPage() {
   const navigate = useNavigate();
@@ -92,7 +74,46 @@ export default function PrTrackingPage() {
   const [statusAnchor, setStatusAnchor] = useState<null | HTMLElement>(null);
   const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
 
-  const { loading, error, data, repos } = usePrTracking(filters);
+  // Add PR dialog state
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [prUrlInput, setPrUrlInput] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  // Refresh state
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { loading, error, data, reload } = usePrTracking(filters);
+
+  const handleAddPr = async () => {
+    if (!prUrlInput.trim()) return;
+
+    setAddLoading(true);
+    setAddError(null);
+
+    try {
+      await addPrByUrl(prUrlInput.trim());
+      setPrUrlInput("");
+      setAddDialogOpen(false);
+      reload();
+    } catch (err: any) {
+      setAddError(err?.response?.data?.message || "Failed to add PR. Please check the URL and try again.");
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await manualRefreshAll();
+      reload();
+    } catch (err) {
+      console.error("Failed to refresh:", err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const sortedItems = useMemo(() => {
     if (sortBy === "newest") return data.items;
@@ -131,14 +152,56 @@ export default function PrTrackingPage() {
   };
 
   return (
-    <AppLayout activePage="pr-tracking" sidebarExtra={<PrSidebarExtra repos={repos} />}>
+    <AppLayout activePage="pr-tracking">
       <Box sx={{ maxWidth: 1152, mx: "auto", px: 3, py: 5 }}>
-        <Typography sx={{ fontSize: 42, lineHeight: "48px", fontWeight: 700, letterSpacing: -0.8 }}>
-          My Pull Requests
-        </Typography>
-        <Typography sx={{ color: "#a1a1aa", mt: 1, fontSize: 22 / 1.375 }}>
-          Track your contributions and monitor review progress.
-        </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+          <Box>
+            <Typography sx={{ fontSize: 42, lineHeight: "48px", fontWeight: 700, letterSpacing: -0.8 }}>
+              My Pull Requests
+            </Typography>
+            <Typography sx={{ color: "#a1a1aa", mt: 1, fontSize: 22 / 1.375 }}>
+              Track your contributions and monitor review progress.
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1.5}>
+            <Button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              startIcon={refreshing ? <CircularProgress size={16} sx={{ color: "#60a5fa" }} /> : <MSym name="refresh" sx={{ fontSize: 18 }} />}
+              sx={{
+                height: 44,
+                borderRadius: "14px",
+                px: 2.5,
+                textTransform: "none",
+                fontWeight: 600,
+                bgcolor: "rgba(96,165,250,0.1)",
+                border: "1px solid rgba(96,165,250,0.25)",
+                color: "#60a5fa",
+                "&:hover": { bgcolor: "rgba(96,165,250,0.18)" },
+                "&.Mui-disabled": { color: "rgba(96,165,250,0.5)" }
+              }}
+            >
+              {refreshing ? "Syncing..." : "Sync from GitHub"}
+            </Button>
+            <Button
+              onClick={() => setAddDialogOpen(true)}
+              startIcon={<MSym name="add" sx={{ fontSize: 18 }} />}
+              sx={{
+                height: 44,
+                borderRadius: "14px",
+                px: 2.5,
+                textTransform: "none",
+                fontWeight: 700,
+                bgcolor: "#19e66b",
+                color: "#000",
+                boxShadow: "0 0 10px rgba(25,230,107,0.20)",
+                "&:hover": { bgcolor: "#22c55e" }
+              }}
+            >
+              Add PR
+            </Button>
+          </Stack>
+        </Stack>
 
         <Stack direction="row" spacing={2} sx={{ mt: 3, flexWrap: "wrap", rowGap: 1.5 }}>
           {summaryCards.map((card) => (
@@ -237,7 +300,46 @@ export default function PrTrackingPage() {
             </Paper>
           )}
 
-          {!loading && !error && pagedItems.map((item) => {
+          {!loading && !error && pagedItems.length === 0 && (
+            <Paper
+              elevation={0}
+              sx={{
+                bgcolor: "#0b0f17",
+                border: "1px solid #27272a",
+                borderRadius: "20px",
+                px: 4,
+                py: 6,
+                textAlign: "center"
+              }}
+            >
+              <MSym name="fork_right" sx={{ fontSize: 56, color: "#27272a", mb: 2 }} />
+              <Typography sx={{ fontSize: 20, fontWeight: 700, color: "#fff", mb: 1 }}>
+                No pull requests yet
+              </Typography>
+              <Typography sx={{ color: "#a1a1aa", fontSize: 14, mb: 3, maxWidth: 400, mx: "auto" }}>
+                Add a GitHub pull request to track its progress. Only users involved in the PR will be able to see it.
+              </Typography>
+              <Button
+                onClick={() => setAddDialogOpen(true)}
+                startIcon={<MSym name="add" sx={{ fontSize: 18 }} />}
+                sx={{
+                  height: 44,
+                  borderRadius: "14px",
+                  px: 3,
+                  textTransform: "none",
+                  fontWeight: 700,
+                  bgcolor: "#19e66b",
+                  color: "#000",
+                  boxShadow: "0 0 10px rgba(25,230,107,0.20)",
+                  "&:hover": { bgcolor: "#22c55e" }
+                }}
+              >
+                Add Your First PR
+              </Button>
+            </Paper>
+          )}
+
+          {!loading && !error && pagedItems.length > 0 && pagedItems.map((item) => {
             const displayStatus = toDisplayStatus(item);
             const status = statusMeta(displayStatus);
 
@@ -418,6 +520,87 @@ export default function PrTrackingPage() {
           Oldest
         </MenuItem>
       </Menu>
+
+      {/* Add PR Dialog */}
+      <Dialog
+        open={addDialogOpen}
+        onClose={() => { setAddDialogOpen(false); setAddError(null); setPrUrlInput(""); }}
+        PaperProps={{
+          sx: {
+            bgcolor: "#0b0f17",
+            border: "1px solid #27272a",
+            borderRadius: "20px",
+            minWidth: 480,
+            p: 1
+          }
+        }}
+      >
+        <DialogTitle sx={{ color: "#fff", fontWeight: 700, fontSize: 22, pb: 1 }}>
+          Add Pull Request
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: "#a1a1aa", fontSize: 14, mb: 2.5 }}>
+            Enter the GitHub PR URL to track it. Only users involved in the PR (author, reviewers, commenters) will be able to see it.
+          </Typography>
+
+          <TextField
+            fullWidth
+            value={prUrlInput}
+            onChange={(e) => setPrUrlInput(e.target.value)}
+            placeholder="https://github.com/owner/repo/pull/123"
+            onKeyDown={(e) => { if (e.key === "Enter" && !addLoading) handleAddPr(); }}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                bgcolor: "#050509",
+                borderRadius: "14px",
+                color: "#fff",
+                "& fieldset": { borderColor: "#27272a" },
+                "&:hover fieldset": { borderColor: "#3f3f46" },
+                "&.Mui-focused fieldset": { borderColor: "#19e66b" }
+              },
+              "& input::placeholder": { color: "#52525b" }
+            }}
+          />
+
+          {addError && (
+            <Paper
+              elevation={0}
+              sx={{ mt: 2, bgcolor: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px", px: 2, py: 1 }}
+            >
+              <Typography sx={{ color: "#fecaca", fontSize: 13 }}>{addError}</Typography>
+            </Paper>
+          )}
+
+          <Typography sx={{ color: "#52525b", fontSize: 12, mt: 2 }}>
+            Supported formats: https://github.com/owner/repo/pull/123, owner/repo#123
+          </Typography>
+
+          <Stack direction="row" spacing={1.5} justifyContent="flex-end" sx={{ mt: 3 }}>
+            <Button
+              onClick={() => { setAddDialogOpen(false); setAddError(null); setPrUrlInput(""); }}
+              sx={{ textTransform: "none", color: "#a1a1aa", borderRadius: "12px", px: 2.5 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddPr}
+              disabled={!prUrlInput.trim() || addLoading}
+              sx={{
+                textTransform: "none",
+                borderRadius: "12px",
+                px: 3,
+                fontWeight: 700,
+                bgcolor: "#19e66b",
+                color: "#000",
+                "&:hover": { bgcolor: "#22c55e" },
+                "&.Mui-disabled": { bgcolor: "rgba(25,230,107,0.25)", color: "rgba(0,0,0,0.45)" }
+              }}
+            >
+              {addLoading ? <CircularProgress size={18} sx={{ color: "#000" }} /> : "Add PR"}
+            </Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

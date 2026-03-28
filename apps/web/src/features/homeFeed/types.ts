@@ -26,6 +26,7 @@ export interface IssueRow {
   githubUpdatedAt: string;
   claimedByLogin?: string | null;
   githubUrl: string;
+  commentsCount?: number;
 }
 
 export interface FeedPagination {
