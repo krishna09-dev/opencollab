@@ -1,29 +1,31 @@
 import jwt, { Secret, SignOptions } from "jsonwebtoken";
 
-// Secret for signing JWT
-const JWT_SECRET: Secret = process.env.JWT_SECRET || "dev_secret";
+// Get JWT secret at runtime (after dotenv.config() has run)
+function getJwtSecret(): Secret {
+  return process.env.JWT_SECRET || "dev_secret";
+}
 
-// Expiry in SECONDS (default = 7 days)
-const JWT_EXPIRES_IN: number = process.env.JWT_EXPIRES_IN
-  ? Number(process.env.JWT_EXPIRES_IN)
-  : 60 * 60 * 24 * 7; // 7 days. simply make in days
+// Get expiry at runtime
+function getJwtExpiresIn(): number {
+  return process.env.JWT_EXPIRES_IN
+    ? Number(process.env.JWT_EXPIRES_IN)
+    : 60 * 60 * 24 * 7; // 7 days
+}
 
 interface JwtPayloadInput {
   userId: string;
 }
 
-// Sign options using numeric expiry
-const signOptions: SignOptions = {
-  expiresIn: JWT_EXPIRES_IN,
-};
-
 export function signUserJwt(payload: JwtPayloadInput): string {
-  return jwt.sign(payload, JWT_SECRET, signOptions);
+  const signOptions: SignOptions = {
+    expiresIn: getJwtExpiresIn(),
+  };
+  return jwt.sign(payload, getJwtSecret(), signOptions);
 }
 
 export function verifyUserJwt(token: string): any {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, getJwtSecret());
   } catch {
     return null;
   }

@@ -148,6 +148,98 @@ function buildExpectedOutcome(params: {
   return Array.from(new Set(out)).slice(0, 8);
 }
 
+function buildSuggestedResources(params: {
+  labels: string[];
+  body: string;
+  repoLanguage: string | null;
+}) {
+  const labels = (params.labels || []).map((l) => l.toLowerCase());
+  const body = (params.body || "").toLowerCase();
+  const lang = (params.repoLanguage || "").toLowerCase();
+
+  const isReact = labels.some((l) => l.includes("react")) || body.includes("react") || body.includes("suspense") || body.includes("hydration");
+  const isNode = ["javascript", "typescript"].includes(lang);
+  const isPython = lang === "python";
+
+  if (isReact) {
+    return [
+      {
+        title: "React 18 Suspense Docs",
+        url: "https://react.dev/reference/react/Suspense",
+        type: "react.dev/reference/react/Suspense"
+      },
+      {
+        title: "SSR Hydration Guide",
+        url: "https://react.dev/reference/react-dom/client/hydrateRoot",
+        type: "react.dev/reference/react-dom/client/hydrateRoot"
+      },
+      {
+        title: "Discussion: Concurrent Rendering",
+        url: "https://github.com/reactwg/react-18/discussions",
+        type: "Related concurrent mode issue"
+      }
+    ];
+  }
+
+  if (isNode) {
+    return [
+      {
+        title: "GitHub Pull Request Guide",
+        url: "https://docs.github.com/en/pull-requests",
+        type: "docs.github.com"
+      },
+      {
+        title: "Conventional Commits",
+        url: "https://www.conventionalcommits.org/en/v1.0.0/",
+        type: "conventionalcommits.org"
+      },
+      {
+        title: "Writing Tests in JavaScript",
+        url: "https://jestjs.io/docs/getting-started",
+        type: "jestjs.io/docs"
+      }
+    ];
+  }
+
+  if (isPython) {
+    return [
+      {
+        title: "Creating and Running Tests",
+        url: "https://docs.pytest.org/en/stable/getting-started.html",
+        type: "docs.pytest.org"
+      },
+      {
+        title: "GitHub Pull Request Guide",
+        url: "https://docs.github.com/en/pull-requests",
+        type: "docs.github.com"
+      },
+      {
+        title: "How to write a good commit message",
+        url: "https://cbea.ms/git-commit/",
+        type: "cbea.ms/git-commit"
+      }
+    ];
+  }
+
+  return [
+    {
+      title: "GitHub Pull Request Guide",
+      url: "https://docs.github.com/en/pull-requests",
+      type: "docs.github.com"
+    },
+    {
+      title: "How to write a good commit message",
+      url: "https://cbea.ms/git-commit/",
+      type: "cbea.ms/git-commit"
+    },
+    {
+      title: "Issue Triage Best Practices",
+      url: "https://opensource.guide/best-practices/",
+      type: "opensource.guide"
+    }
+  ];
+}
+
 function sameArray(a: any[], b: any[]) {
   return JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
 }
@@ -265,10 +357,11 @@ async function syncIssueFromGitHub(
   const gitFlowCommands = buildGitFlowCommands(owner, repo, githubNumber, repoMeta);
   const projectSetupCommands = buildProjectSetupCommands(repoMeta);
 
-  const suggestedResources = [
-    { title: "GitHub Pull Request Guide", url: "https://docs.github.com/en/pull-requests" },
-    { title: "How to write a good commit message", url: "https://cbea.ms/git-commit/" }
-  ];
+  const suggestedResources = buildSuggestedResources({
+    labels,
+    body: ghIssue.body || "",
+    repoLanguage: repoMeta?.language || null
+  });
 
   const baseData = {
     githubNumber,

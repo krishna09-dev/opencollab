@@ -6,3 +6,5 @@ apps/web/.env
 apps/worker/.env
 package-lock.json.DS_Store
 .DS_Store
+__pycache__/
+*.pyc

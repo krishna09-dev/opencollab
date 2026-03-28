@@ -1,0 +1,5 @@
+user_id,precision@5,precision@10,diversity,lang_diversity,top_score,top_recommendation
+test_user_1,0.8,0.6,0.8,0.5,0.271,Add example usage in README
+test_user_2,1.0,1.0,1.0,0.1,0.209,Fix concurrent write bug
+test_user_3,1.0,1.0,1.0,0.5,0.198,Add trim function
+test_user_4,0.6,0.4,1.0,0.2,0.319,cannot add items

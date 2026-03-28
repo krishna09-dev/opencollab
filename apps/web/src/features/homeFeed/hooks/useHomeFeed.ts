@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchMe, fetchIssueStats, fetchFeed } from "../api/homeApi";
+import { fetchMe, fetchIssueStats, fetchFeed, fetchRecommendations } from "../api/homeApi";
+import type { RecommendationItem } from "../api/homeApi";
 import type { IssueStatsResponse, IssueRow, FeedPagination, FeedFilters } from "../types";
 
 export function useHomeFeed() {
@@ -16,7 +17,25 @@ export function useHomeFeed() {
 
   const [filters, setFilters] = useState<FeedFilters>({ page: 1, limit: 10 });
 
+  // ML Recommendations
+  const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [useRecommendations, setUseRecommendations] = useState(false);
+
   const navigate = useNavigate();
+
+  const loadRecommendations = useCallback(async () => {
+    setRecommendationsLoading(true);
+    try {
+      const data = await fetchRecommendations(5);
+      setRecommendations(data.recommendations || []);
+    } catch (err) {
+      console.error("Failed to load recommendations:", err);
+      setRecommendations([]);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  }, []);
 
   const loadIssues = useCallback(async (f: FeedFilters = filters) => {
     setIssuesLoading(true);
@@ -57,7 +76,11 @@ export function useHomeFeed() {
           // ignore
         }
 
-        await loadIssues();
+        // Load both issues and recommendations
+        await Promise.all([
+          loadIssues(),
+          loadRecommendations()
+        ]);
       } catch (err) {
         console.error(err);
         navigate("/login", { replace: true });
@@ -79,12 +102,17 @@ export function useHomeFeed() {
   const updateFilters = useCallback((newFilters: Partial<FeedFilters>) => {
     const merged = { ...filters, ...newFilters };
     setFilters(merged);
+    setUseRecommendations(false); // Switch back to regular feed when filtering
     loadIssues(merged);
   }, [filters, loadIssues]);
 
   const goToPage = useCallback((page: number) => {
     updateFilters({ page });
   }, [updateFilters]);
+
+  const toggleRecommendations = useCallback(() => {
+    setUseRecommendations((prev) => !prev);
+  }, []);
 
   const headline = isNewUser
     ? `Welcome, ${username}!`
@@ -101,6 +129,12 @@ export function useHomeFeed() {
     filters,
     updateFilters,
     goToPage,
-    loadIssues: () => loadIssues(filters)
+    loadIssues: () => loadIssues(filters),
+    // Recommendations
+    recommendations,
+    recommendationsLoading,
+    useRecommendations,
+    toggleRecommendations,
+    loadRecommendations
   };
 }
