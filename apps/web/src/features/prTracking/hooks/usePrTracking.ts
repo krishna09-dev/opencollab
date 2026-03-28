@@ -6,7 +6,19 @@ import { fetchPrList, fetchPrMessages } from "../api/prTrackingApi";
 export function usePrTracking(filters: PrFilterState) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<PrListResponse>({ items: [], total: 0 });
+  const [data, setData] = useState<PrListResponse>({
+    items: [],
+    total: 0,
+    summary: {
+      total: 0,
+      open: 0,
+      inReview: 0,
+      changesRequested: 0,
+      merged: 0,
+      accepted: 0,
+      closed: 0
+    }
+  });
 
   useEffect(() => {
     let alive = true;

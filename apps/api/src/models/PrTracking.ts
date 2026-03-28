@@ -19,6 +19,15 @@ export interface IPrTracking extends Document {
   prState?: "open" | "closed" | null;
   mergedAt?: Date | null;
   closedAt?: Date | null;
+  prUpdatedAt?: Date | null;
+
+  // PR metadata used by UI cards/status grouping
+  prBody?: string | null;
+  primaryLanguage?: string | null;
+  requestedReviewersCount?: number;
+  reviewState?: "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | null;
+  commentsCount?: number;
+  reviewCommentsCount?: number;
 
   status: PrStatus;
 
@@ -44,6 +53,18 @@ const PrTrackingSchema = new Schema<IPrTracking>(
     prState: { type: String, enum: ["open", "closed", null], default: null },
     mergedAt: { type: Date, default: null },
     closedAt: { type: Date, default: null },
+    prUpdatedAt: { type: Date, default: null },
+
+    prBody: { type: String, default: null },
+    primaryLanguage: { type: String, default: null },
+    requestedReviewersCount: { type: Number, default: 0 },
+    reviewState: {
+      type: String,
+      enum: ["APPROVED", "CHANGES_REQUESTED", "COMMENTED", null],
+      default: null
+    },
+    commentsCount: { type: Number, default: 0 },
+    reviewCommentsCount: { type: Number, default: 0 },
 
     status: { type: String, enum: ["ACCEPTED", "PR_OPEN", "MERGED", "CLOSED"], default: "ACCEPTED", index: true },
 

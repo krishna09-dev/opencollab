@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { api, authHeaders } from "../lib/api";
+import { api, authHeaders } from "../../../lib/api";
 import { Box, CircularProgress, Typography, Paper, Container } from "@mui/material";
 
 function useQuery() {
@@ -85,7 +85,7 @@ function AuthCallbackPage() {
                 Connecting to GitHub…
               </Typography>
               <Typography variant="body2" sx={{ color: "#a0a0b5" }}>
-                We’re verifying your GitHub account and loading your OpenCollab
+                We're verifying your GitHub account and loading your OpenCollab
                 profile. This usually takes just a moment.
               </Typography>
             </>

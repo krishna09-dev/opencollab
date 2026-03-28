@@ -1,0 +1,28 @@
+import { api, authHeaders } from "../../../lib/api";
+import type { MeResponse, IssueStatsResponse, FeedResponse, FeedFilters } from "../types";
+
+export async function fetchMe() {
+  const res = await api.get<MeResponse>("/api/me", { headers: authHeaders() });
+  return res.data;
+}
+
+export async function fetchIssueStats() {
+  const res = await api.get<IssueStatsResponse>("/api/issues/stats", { headers: authHeaders() });
+  return res.data;
+}
+
+export async function fetchFeed(filters: FeedFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.status) params.set("status", filters.status);
+  if (filters.language) params.set("language", filters.language);
+  if (filters.difficulty) params.set("difficulty", filters.difficulty);
+  if (filters.search) params.set("search", filters.search);
+  if (filters.sort) params.set("sort", filters.sort);
+
+  const res = await api.get<FeedResponse>(`/api/issues?${params.toString()}`, {
+    headers: authHeaders()
+  });
+  return res.data;
+}

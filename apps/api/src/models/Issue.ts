@@ -141,7 +141,6 @@ const IssueSchema = new Schema<IssueDocument>(
     repoOwner: { type: String, required: true },
     repoName: { type: String, required: true },
     lastSyncedAt: { type: Date },
-    
 
     title: { type: String, required: true },
     body: { type: String, default: "" },
@@ -184,6 +183,10 @@ const IssueSchema = new Schema<IssueDocument>(
   { timestamps: true }
 );
 
+// Unique key for upsert / dedupe
 IssueSchema.index({ repoOwner: 1, repoName: 1, githubNumber: 1 }, { unique: true });
+
+// list screens (fast sorting/filtering)
+IssueSchema.index({ beginnerFriendly: 1, status: 1, githubUpdatedAt: -1 });
 
 export const Issue = mongoose.model<IssueDocument>("Issue", IssueSchema);

@@ -1,0 +1,92 @@
+export type IssueStatus = "open" | "claimed" | "closed";
+export type PrStatus = "NONE" | "PR_OPEN" | "MERGED" | "CLOSED";
+
+export type SuggestedResource = { title: string; url: string; type?: string | null };
+
+export type IssueUpdateItem = {
+  id: string;
+  actorLogin: string;
+  actorRole?: string | null;
+  body: string;
+  createdAt: string | Date;
+};
+
+export type TimelineItem = {
+  id: string;
+  title: string;
+  status: string;
+  at: string | Date;
+  meta?: string | null;
+};
+
+export interface RepoHealth {
+  healthScore: number;
+  activityScore: number;
+  openIssues: number;
+  recentCommits: number;
+}
+
+export interface SetupInstruction {
+  label: string;
+  command: string;
+}
+
+export interface IssueDto {
+  _id: string;
+  githubNumber: number;
+  repoOwner: string;
+  repoName: string;
+
+  title: string;
+  body: string;
+  summary: string;
+  labels: string[];
+
+  status: IssueStatus;
+  claimedByUserId?: string | null;
+  claimedByLogin?: string | null;
+
+  githubUrl: string;
+  githubCreatedAt: string | Date;
+  githubUpdatedAt: string | Date;
+
+  openedAt: string | Date;
+  claimedAt?: string | Date | null;
+
+  requiredSkills: string[];
+  expectedOutcome: string[];
+  suggestedResources: SuggestedResource[];
+
+  repoHealth: RepoHealth;
+  beginnerFriendly: boolean;
+  activeMaintainer: boolean;
+  recentlyUpdated: boolean;
+
+  autoSetupCommands: SetupInstruction[];
+  projectSetupCommands?: SetupInstruction[];
+  maintainerSetupNotes?: string | null;
+
+  prStatus: PrStatus;
+  lastPrMessage?: string | null;
+
+  updates: IssueUpdateItem[];
+  contributionTimeline: TimelineItem[];
+
+  notifyWatchers: string[];
+}
+
+export interface CurrentUser {
+  id: string;
+  login: string;
+  email?: string;
+  avatarUrl?: string;
+}
+
+export interface NotificationDto {
+  id: string;
+  type: "ISSUE_AVAILABLE";
+  issueId: string;
+  issueTitle: string;
+  createdAt: string;
+  read: boolean;
+}

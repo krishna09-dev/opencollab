@@ -1,5 +1,6 @@
 import { Router, Response } from "express";
 import axios from "axios";
+import mongoose from "mongoose";
 import { AuthRequest, authRequired } from "../middleware/auth";
 import { User } from "../models/User";
 import {
@@ -18,6 +19,8 @@ const GITHUB_API_TOKEN = process.env.GITHUB_API_TOKEN;
 
 const REFRESH_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
+const GITHUB_SYSTEM_TOKEN = process.env.GITHUB_SYSTEM_TOKEN;
+
 function ghHeaders(userToken?: string): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -26,7 +29,7 @@ function ghHeaders(userToken?: string): Record<string, string> {
 
   // Prefer logged-in user's token, fallback to server token
   if (userToken) headers.Authorization = `Bearer ${userToken}`;
-  else if (GITHUB_API_TOKEN) headers.Authorization = `Bearer ${GITHUB_API_TOKEN}`;
+  else if (GITHUB_SYSTEM_TOKEN) headers.Authorization = `Bearer ${GITHUB_SYSTEM_TOKEN}`;
 
   return headers;
 }
@@ -193,6 +196,28 @@ function mergeIssueUpdates(
   return merged;
 }
 
+/**
+ * Helper: resolve an Issue using the route param.
+ * - If param is Mongo ObjectId => findById (works for Sprint 5 ingestion across many repos)
+ * - Else if param is numeric => treat as legacy githubNumber for DEFAULT repo (backward compatibility)
+ */
+async function findIssueByParam(idParam: string): Promise<IssueDocument | null> {
+  if (mongoose.isValidObjectId(idParam)) {
+    return await Issue.findById(idParam);
+  }
+
+  const githubNumber = Number(idParam);
+  if (!Number.isNaN(githubNumber)) {
+    return await Issue.findOne({
+      repoOwner: DEFAULT_OWNER,
+      repoName: DEFAULT_REPO,
+      githubNumber
+    });
+  }
+
+  return null;
+}
+
 // ------- GitHub -> Mongo sync -------
 async function syncIssueFromGitHub(
   owner: string,
@@ -291,8 +316,7 @@ async function syncIssueFromGitHub(
     const created = await Issue.create({
       ...baseData,
       status,
-
-      lastSyncedAt: new Date(), // ✅
+      lastSyncedAt: new Date(),
 
       repoHealth: {
         healthScore: 85,
@@ -344,30 +368,130 @@ async function syncIssueFromGitHub(
 
   if (status === "closed") existing.status = "closed";
 
-  existing.lastSyncedAt = new Date(); // ✅
+  existing.lastSyncedAt = new Date();
   await existing.save();
   return existing;
 }
 
+router.get("/stats", authRequired, async (_req: AuthRequest, res: Response) => {
+  try {
+    const total = await Issue.countDocuments({});
+    const open = await Issue.countDocuments({ status: "open" });
+    const beginner = await Issue.countDocuments({ beginnerFriendly: true });
+
+    return res.json({ total, open, beginner });
+  } catch (err) {
+    console.error("GET /api/issues/stats error:", err);
+    return res.status(500).json({ message: "Failed to load stats" });
+  }
+});
+
+router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      page = "1",
+      limit = "10",
+      status,
+      language,
+      difficulty,
+      search,
+      sort = "newest"
+    } = req.query as Record<string, string | undefined>;
+
+    const pageNum = Math.max(1, parseInt(page || "1", 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit || "10", 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build filter
+    const filter: Record<string, any> = {};
+
+    if (status && ["open", "claimed", "closed"].includes(status)) {
+      filter.status = status;
+    }
+
+    if (language) {
+      const langs = language.split(",").map((l) => l.trim()).filter(Boolean);
+      if (langs.length > 0) {
+        filter.$or = langs.map((l) => ({
+          $or: [
+            { labels: { $regex: new RegExp(l, "i") } },
+            { requiredSkills: { $regex: new RegExp(l, "i") } }
+          ]
+        }));
+      }
+    }
+
+    if (difficulty) {
+      if (difficulty === "beginner") {
+        filter.beginnerFriendly = true;
+      }
+    }
+
+    if (search && search.trim()) {
+      const s = search.trim();
+      filter.$and = [
+        ...(filter.$and || []),
+        {
+          $or: [
+            { title: { $regex: new RegExp(s, "i") } },
+            { repoName: { $regex: new RegExp(s, "i") } },
+            { repoOwner: { $regex: new RegExp(s, "i") } },
+            { summary: { $regex: new RegExp(s, "i") } }
+          ]
+        }
+      ];
+    }
+
+    // Sort
+    let sortObj: Record<string, 1 | -1> = { githubUpdatedAt: -1 };
+    if (sort === "oldest") sortObj = { githubUpdatedAt: 1 };
+    else if (sort === "recently-created") sortObj = { githubCreatedAt: -1 };
+
+    const [issues, total] = await Promise.all([
+      Issue.find(filter)
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limitNum)
+        .select(
+          "_id githubNumber repoOwner repoName title body summary status labels " +
+          "requiredSkills beginnerFriendly githubCreatedAt githubUpdatedAt " +
+          "claimedByLogin githubUrl"
+        ),
+      Issue.countDocuments(filter)
+    ]);
+
+    return res.json({
+      issues,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (err) {
+    console.error("GET /api/issues error:", err);
+    return res.status(500).json({ message: "Failed to load issues list" });
+  }
+});
+
 // ------- Routes -------
+
+// ✅ GET issue by Mongo _id OR legacy githubNumber
 router.get("/:id", authRequired, async (req: AuthRequest, res: Response) => {
   const idParam = req.params.id;
 
   try {
+    // Backward compatible: if githubNumber and not in DB, fetch once for default repo
     const githubNumber = Number(idParam);
-
-    // -------- GitHub number --------
     if (!Number.isNaN(githubNumber)) {
-      // ✅ DB FIRST
       const fromDb = await Issue.findOne({
         repoOwner: DEFAULT_OWNER,
         repoName: DEFAULT_REPO,
         githubNumber
       });
-
       if (fromDb) return res.json(fromDb);
 
-      // ✅ Not in DB -> fetch ONCE
       const user = await User.findById(req.userId).select("githubAccessToken");
       const userToken = user?.githubAccessToken || undefined;
 
@@ -377,7 +501,11 @@ router.get("/:id", authRequired, async (req: AuthRequest, res: Response) => {
       return res.json(issue);
     }
 
-    // -------- Mongo ObjectId --------
+    // Otherwise: Mongo ObjectId path
+    if (!mongoose.isValidObjectId(idParam)) {
+      return res.status(400).json({ message: "Invalid issue id" });
+    }
+
     const issueById = await Issue.findById(idParam);
     if (!issueById) return res.status(404).json({ message: "Issue not found" });
 
@@ -388,22 +516,13 @@ router.get("/:id", authRequired, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ✅ Refresh works for Mongo _id and legacy githubNumber
 router.post("/:id/refresh", authRequired, async (req: AuthRequest, res: Response) => {
-  const githubNumber = Number(req.params.id);
-  if (Number.isNaN(githubNumber)) {
-    return res.status(400).json({ message: "Invalid issue id" });
-  }
-
   try {
-    const issue = await Issue.findOne({
-      repoOwner: DEFAULT_OWNER,
-      repoName: DEFAULT_REPO,
-      githubNumber
-    });
-
+    const issue = await findIssueByParam(req.params.id);
     if (!issue) return res.status(404).json({ message: "Issue not found" });
 
-    // ⏱️ cooldown
+    // cooldown
     const last = issue.lastSyncedAt ? new Date(issue.lastSyncedAt).getTime() : 0;
     const now = Date.now();
 
@@ -417,10 +536,15 @@ router.post("/:id/refresh", authRequired, async (req: AuthRequest, res: Response
     const user = await User.findById(req.userId).select("githubAccessToken");
     const userToken = user?.githubAccessToken || undefined;
 
-    const refreshed = await syncIssueFromGitHub(DEFAULT_OWNER, DEFAULT_REPO, githubNumber, userToken);
+    // Refresh using the actual issue identity (supports many repos)
+    const refreshed = await syncIssueFromGitHub(
+      issue.repoOwner,
+      issue.repoName,
+      issue.githubNumber,
+      userToken
+    );
     if (!refreshed) return res.status(404).json({ message: "Issue not found" });
 
-    // syncIssueFromGitHub already sets lastSyncedAt
     return res.json({ message: "Issue refreshed", issue: refreshed });
   } catch (err) {
     console.error("POST /api/issues/:id/refresh error:", err);
@@ -428,13 +552,12 @@ router.post("/:id/refresh", authRequired, async (req: AuthRequest, res: Response
   }
 });
 
+// ✅ Claim works for Mongo _id and legacy githubNumber
 router.post("/:id/claim", authRequired, async (req: AuthRequest, res: Response) => {
-  const githubNumber = Number(req.params.id);
-  if (Number.isNaN(githubNumber)) return res.status(400).json({ message: "Invalid issue id" });
   if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
-    const issue = await Issue.findOne({ repoOwner: DEFAULT_OWNER, repoName: DEFAULT_REPO, githubNumber });
+    const issue = await findIssueByParam(req.params.id);
     if (!issue) return res.status(404).json({ message: "Issue not found" });
     if (issue.status === "closed") return res.status(400).json({ message: "Issue is closed." });
 
@@ -481,13 +604,12 @@ router.post("/:id/claim", authRequired, async (req: AuthRequest, res: Response) 
   }
 });
 
+// ✅ Abort works for Mongo _id and legacy githubNumber
 router.post("/:id/abort", authRequired, async (req: AuthRequest, res: Response) => {
-  const githubNumber = Number(req.params.id);
-  if (Number.isNaN(githubNumber)) return res.status(400).json({ message: "Invalid issue id" });
   if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
-    const issue = await Issue.findOne({ repoOwner: DEFAULT_OWNER, repoName: DEFAULT_REPO, githubNumber });
+    const issue = await findIssueByParam(req.params.id);
     if (!issue) return res.status(404).json({ message: "Issue not found" });
 
     if (issue.status !== "claimed" || !issue.claimedByUserId) {
@@ -521,7 +643,7 @@ router.post("/:id/abort", authRequired, async (req: AuthRequest, res: Response) 
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         userId: watcherUserId,
         type: "ISSUE_AVAILABLE",
-        issueId: String(issue.githubNumber),
+        issueId: String(issue.githubNumber), // keep your existing semantics
         issueTitle: issue.title,
         createdAt: now,
         read: false
@@ -539,13 +661,12 @@ router.post("/:id/abort", authRequired, async (req: AuthRequest, res: Response) 
   }
 });
 
+// ✅ Notify works for Mongo _id and legacy githubNumber
 router.post("/:id/notify", authRequired, async (req: AuthRequest, res: Response) => {
-  const githubNumber = Number(req.params.id);
-  if (Number.isNaN(githubNumber)) return res.status(400).json({ message: "Invalid issue id" });
   if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
-    const issue = await Issue.findOne({ repoOwner: DEFAULT_OWNER, repoName: DEFAULT_REPO, githubNumber });
+    const issue = await findIssueByParam(req.params.id);
     if (!issue) return res.status(404).json({ message: "Issue not found" });
 
     if (issue.status === "open") {
