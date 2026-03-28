@@ -1,5 +1,5 @@
 // apps/web/src/features/prTracking/hooks/usePrTracking.ts
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PrFilterState, PrListResponse, PrMessage } from "../types";
 import { fetchPrList, fetchPrMessages } from "../api/prTrackingApi";
 
@@ -19,6 +19,11 @@ export function usePrTracking(filters: PrFilterState) {
       closed: 0
     }
   });
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  const reload = useCallback(() => {
+    setReloadTrigger((prev) => prev + 1);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -40,7 +45,7 @@ export function usePrTracking(filters: PrFilterState) {
     return () => {
       alive = false;
     };
-  }, [filters.q, filters.status, filters.repo]);
+  }, [filters.q, filters.status, filters.repo, reloadTrigger]);
 
   const repos = useMemo(() => {
     const set = new Set<string>();
@@ -48,7 +53,7 @@ export function usePrTracking(filters: PrFilterState) {
     return ["All" as const, ...Array.from(set).sort()];
   }, [data.items]);
 
-  return { loading, error, data, repos };
+  return { loading, error, data, repos, reload };
 }
 
 export function usePrMessages(prId: string | null) {

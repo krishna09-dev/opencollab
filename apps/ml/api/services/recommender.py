@@ -16,6 +16,8 @@ from utils.text_processing import (
 
 DIFFICULTY_MAP = {"beginner": 1, "intermediate": 2, "advanced": 3}
 MAX_PER_REPO = 3
+MIN_SCORE_THRESHOLD = 0.5
+MAX_RECOMMENDATIONS = 5
 
 
 def compute_recommendations(
@@ -78,8 +80,18 @@ def compute_recommendations(
     # Sort by similarity score
     scored_issues.sort(key=lambda x: x["score"], reverse=True)
 
+    # Filter out issues below the minimum score threshold (50%)
+    scored_issues = [item for item in scored_issues if item["score"] >= MIN_SCORE_THRESHOLD]
+
+    # If no issues pass the threshold, return empty (no AI recommendations)
+    if not scored_issues:
+        return []
+
+    # Cap at MAX_RECOMMENDATIONS (top 5)
+    effective_top_n = min(top_n, MAX_RECOMMENDATIONS)
+
     # Apply diversity constraints (max per repo)
-    diverse_results = _apply_diversity_constraints(scored_issues, top_n)
+    diverse_results = _apply_diversity_constraints(scored_issues, effective_top_n)
 
     # Build recommendations
     return _build_recommendations(diverse_results)

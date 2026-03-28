@@ -71,12 +71,6 @@ function ResourcesSidebarExtra({
         })}
       </Stack>
 
-      <Divider sx={{ borderColor: "#27272a", my: 2.5 }} />
-      <Button fullWidth sx={{ justifyContent: "flex-start", textTransform: "none", borderRadius: "14px", px: 1.5, py: 1, color: "#a1a1aa", fontWeight: 500, gap: 1 }}>
-        <MSym name="bookmark" sx={{ fontSize: 16 }} />
-        Saved Guides
-        <Box sx={{ ml: "auto", borderRadius: "8px", px: 0.8, bgcolor: "rgba(39,39,42,0.5)", color: "#a1a1aa", fontSize: 12 }}>8</Box>
-      </Button>
     </>
   );
 }

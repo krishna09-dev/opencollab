@@ -89,6 +89,7 @@ function computeFallbackRecommendations(
       labels: (issue.labels || []).slice(0, 5).join(", "),
       topics: (issue.requiredSkills || []).slice(0, 5).join(", "),
       similarity_score: Math.min(1, score / 10),
+      summary: issue.summary || issue.body?.slice(0, 200) || "",
       _score: score
     };
   });
@@ -96,14 +97,21 @@ function computeFallbackRecommendations(
   // Sort by score and take top N
   scored.sort((a, b) => b._score - a._score);
 
-  // Diversify - max 3 per repo
+  // Filter out items below 50% similarity threshold
+  const aboveThreshold = scored.filter(item => item.similarity_score >= 0.5);
+
+  // If no items pass the threshold, return empty (no AI recommendations)
+  if (aboveThreshold.length === 0) return [];
+
+  // Diversify - max 3 per repo, cap at 5 recommendations
+  const maxResults = Math.min(topN, 5);
   const repoCount: Record<string, number> = {};
-  const diverse = scored.filter(item => {
+  const diverse = aboveThreshold.filter(item => {
     const count = repoCount[item.repo_name] || 0;
     if (count >= 3) return false;
     repoCount[item.repo_name] = count + 1;
     return true;
-  }).slice(0, topN);
+  }).slice(0, maxResults);
 
   // Remove internal score field
   return diverse.map(({ _score, ...rest }) => rest);
@@ -116,7 +124,7 @@ async function fetchDatabaseIssues() {
   // Fetch all open issues from MongoDB
   const issues = await Issue.find({ status: "open" })
     .select(
-      "_id repoOwner repoName title body labels requiredSkills beginnerFriendly"
+      "_id repoOwner repoName title body summary labels requiredSkills beginnerFriendly"
     )
     .limit(500) // Limit for performance
     .lean();
@@ -128,6 +136,7 @@ async function fetchDatabaseIssues() {
     repoName: issue.repoName || "",
     title: issue.title || "",
     body: issue.body || "",
+    summary: issue.summary || "",
     labels: issue.labels || [],
     requiredSkills: issue.requiredSkills || [],
     beginnerFriendly: issue.beginnerFriendly || false

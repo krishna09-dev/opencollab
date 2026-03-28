@@ -9,6 +9,7 @@ import ResourcesPage from "./features/resources/pages/ResourcesPage";
 import GoodFirstIssuesPage from "./features/goodFirstIssues/pages/GoodFirstIssuesPage";
 import PrTrackingPage from "./features/prTracking/pages/PrTrackingPage";
 import PrTrackingDetailPage from "./features/prTracking/pages/PrTrackingDetailPage";
+import SavedIssuesPage from "./features/savedIssues/pages/SavedIssuesPage";
 
 
 function App() {
@@ -39,6 +40,9 @@ function App() {
 
         <Route path="/pr-tracking" element={<PrTrackingPage />} />
         <Route path="/pr-tracking/:id" element={<PrTrackingDetailPage />} />
+
+        {/* Saved Issues */}
+        <Route path="/saved" element={<SavedIssuesPage />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -5,11 +5,12 @@ import {
   ArrowBack,
   ArrowForward,
   AutoAwesome,
+  Bookmark,
+  BookmarkAdd,
   ChatBubbleOutline,
   ExpandMore,
   Search,
   Sort,
-  ThumbUpOffAlt,
   Tune
 } from "@mui/icons-material";
 import {
@@ -18,6 +19,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  IconButton,
   InputBase,
   Stack,
   Typography
@@ -26,6 +28,7 @@ import {
 import AppLayout from "../../../components/layout/AppLayout";
 import MSym from "../../resources/components/MSym";
 import { useGoodFirstIssues } from "../hooks/useGoodFirstIssues";
+import { useSavedIssues } from "../../../hooks/useSavedIssues";
 import type { GoodFirstIssue, DifficultyLevel } from "../types";
 import { DIFFICULTY_CONFIGS } from "../types";
 
@@ -200,7 +203,7 @@ function GoodFirstIssuesSidebar({
 }
 
 // Issue card component
-function GoodFirstIssueCard({ issue }: { issue: GoodFirstIssue }) {
+function GoodFirstIssueCard({ issue, isSaved, onToggleSave }: { issue: GoodFirstIssue; isSaved?: boolean; onToggleSave?: (id: string, meta?: { title: string; repoOwner: string; repoName: string }) => void }) {
   const navigate = useNavigate();
   const config = DIFFICULTY_CONFIGS[issue.difficulty];
   const isClaimed = issue.status === "claimed";
@@ -272,57 +275,66 @@ function GoodFirstIssueCard({ issue }: { issue: GoodFirstIssue }) {
                 }}
               />
             </Stack>
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
               <Stack direction="row" spacing={0.7} alignItems="center">
                 <ChatBubbleOutline sx={{ fontSize: 16, color: "#a1a1aa" }} />
                 <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>
-                  {issue.requiredSkills?.length || 0}
+                  {(issue as any).commentsCount ?? 0}
                 </Typography>
               </Stack>
-              <Stack direction="row" spacing={0.7} alignItems="center">
-                <ThumbUpOffAlt sx={{ fontSize: 16, color: "#a1a1aa" }} />
-                <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontWeight: 500 }}>
-                  {issue.labels?.length || 0}
-                </Typography>
-              </Stack>
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSave?.(issue._id, { title: issue.title, repoOwner: issue.repoOwner, repoName: issue.repoName });
+                }}
+                sx={{
+                  color: isSaved ? "#19e66b" : "#a1a1aa",
+                  p: 0.5,
+                  "&:hover": { bgcolor: "rgba(25,230,107,0.1)" }
+                }}
+              >
+                {isSaved ? <Bookmark sx={{ fontSize: 18 }} /> : <BookmarkAdd sx={{ fontSize: 18 }} />}
+              </IconButton>
             </Stack>
           </Stack>
         </Box>
-        <Button
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/issues/${issue._id}`);
-          }}
-          sx={
-            ctaPrimary
-              ? {
-                  minHeight: 36,
-                  textTransform: "none",
-                  borderRadius: "14px",
-                  px: 2,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  bgcolor: "#19e66b",
-                  color: "#000",
-                  boxShadow: "0 0 10px rgba(25,230,107,0.2)",
-                  whiteSpace: "nowrap"
-                }
-              : {
-                  minHeight: 36,
-                  textTransform: "none",
-                  borderRadius: "14px",
-                  px: 2,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  border: "1px solid #27272a",
-                  color: isClosed ? "#a1a1aa" : "#fff",
-                  bgcolor: "#0b0f17",
-                  whiteSpace: "nowrap"
-                }
-          }
-        >
-          {cta}
-        </Button>
+        <Stack spacing={1} alignItems="center">
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/issues/${issue._id}`);
+            }}
+            sx={
+              ctaPrimary
+                ? {
+                    minHeight: 36,
+                    textTransform: "none",
+                    borderRadius: "14px",
+                    px: 2,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    bgcolor: "#19e66b",
+                    color: "#000",
+                    boxShadow: "0 0 10px rgba(25,230,107,0.2)",
+                    whiteSpace: "nowrap"
+                  }
+                : {
+                    minHeight: 36,
+                    textTransform: "none",
+                    borderRadius: "14px",
+                    px: 2,
+                    fontSize: 14,
+                    fontWeight: 500,
+                    border: "1px solid #27272a",
+                    color: isClosed ? "#a1a1aa" : "#fff",
+                    bgcolor: "#0b0f17",
+                    whiteSpace: "nowrap"
+                  }
+            }
+          >
+            {cta}
+          </Button>
+        </Stack>
       </Stack>
       {isClaimed && (
         <Box
@@ -349,6 +361,7 @@ function GoodFirstIssueCard({ issue }: { issue: GoodFirstIssue }) {
 
 // Main page component
 export default function GoodFirstIssuesPage() {
+  const { isSaved, toggleSave } = useSavedIssues();
   const {
     userLevel,
     changeUserLevel,
@@ -624,7 +637,7 @@ export default function GoodFirstIssuesPage() {
         ) : (
           <Stack spacing={2}>
             {displayIssues.map((issue) => (
-              <GoodFirstIssueCard key={issue._id} issue={issue} />
+              <GoodFirstIssueCard key={issue._id} issue={issue} isSaved={isSaved(issue._id)} onToggleSave={toggleSave} />
             ))}
           </Stack>
         )}

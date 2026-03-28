@@ -1,784 +1,173 @@
 import { Router, Response } from "express";
-import axios from "axios";
 import mongoose from "mongoose";
 import { AuthRequest, authRequired } from "../middleware/auth";
-import { User } from "../models/User";
+import { validate } from "../middleware/validate";
 import {
-  Issue,
-  type IssueDocument,
-  type IssueStatus,
-  type IssueUpdateItem
-} from "../models/Issue";
-import { notifications, type NotificationDto } from "./notifications.routes";
+  listIssuesSchema,
+  getIssueSchema,
+  claimIssueSchema,
+  refreshIssueSchema,
+  abortIssueSchema,
+  notifyIssueSchema
+} from "../validators/issues.validator";
+import { issuesService } from "../services/issues.service";
 
 const router = Router();
 
-const DEFAULT_OWNER = "GoogleCloudPlatform";
-const DEFAULT_REPO = "agent-starter-pack";
-const GITHUB_API_TOKEN = process.env.GITHUB_API_TOKEN;
-
-const REFRESH_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
-
-const GITHUB_SYSTEM_TOKEN = process.env.GITHUB_SYSTEM_TOKEN;
-
-function ghHeaders(userToken?: string): Record<string, string> {
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "opencollab-app"
-  };
-
-  // Prefer logged-in user's token, fallback to server token
-  if (userToken) headers.Authorization = `Bearer ${userToken}`;
-  else if (GITHUB_SYSTEM_TOKEN) headers.Authorization = `Bearer ${GITHUB_SYSTEM_TOKEN}`;
-
-  return headers;
-}
-
-function shortId(prefix: string) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-}
-
-function isBeginnerLabel(l: string) {
-  const x = l.toLowerCase();
-  return x === "good first issue" || x === "good-first-issue" || x.includes("beginner");
-}
-
-async function getRepoMeta(owner: string, repo: string, userToken?: string) {
-  const url = `https://api.github.com/repos/${owner}/${repo}`;
-  const res = await axios.get(url, { headers: ghHeaders(userToken) });
-  return res.data as {
-    clone_url: string;
-    language: string | null;
-    default_branch: string;
-    open_issues_count: number;
-  };
-}
-
-function buildGitFlowCommands(owner: string, repo: string, issueNumber: number, repoMeta: any) {
-  const branch = `fix/issue-${issueNumber}`;
-  const cloneUrl = repoMeta?.clone_url || `https://github.com/${owner}/${repo}.git`;
-
-  return [
-    { label: "Fork the repository", command: `Open https://github.com/${owner}/${repo} and click Fork` },
-    { label: "Clone the forked repository", command: `git clone ${cloneUrl}` },
-    { label: "Enter project directory", command: `cd ${repo}` },
-    { label: "Create a new branch", command: `git checkout -b ${branch}` },
-    { label: "Check current branch", command: `git branch` },
-    { label: "Stage changes", command: `git add .` },
-    { label: "Commit changes", command: `git commit -m "Fix #${issueNumber}"` },
-    { label: "Push branch", command: `git push -u origin ${branch}` },
-    { label: "Open Pull Request", command: `Open GitHub → Compare & pull request → mention #${issueNumber}` }
-  ];
-}
-
-function buildProjectSetupCommands(repoMeta: any) {
-  const lang = (repoMeta?.language || "").toLowerCase();
-
-  if (["javascript", "typescript"].includes(lang)) {
-    return [
-      { label: "Install dependencies", command: "npm install" },
-      { label: "Run dev server", command: "npm run dev" },
-      { label: "Run tests", command: "npm test" }
-    ];
-  }
-
-  if (lang === "python") {
-    return [
-      { label: "Create virtual environment", command: "python -m venv .venv" },
-      { label: "Activate venv (mac/linux)", command: "source .venv/bin/activate" },
-      { label: "Install dependencies", command: "pip install -r requirements.txt" },
-      { label: "Run tests", command: "pytest -q" }
-    ];
-  }
-
-  return [{ label: "Project setup", command: "See repository README for setup commands." }];
-}
-
-function buildRequiredSkills(labels: string[], repoLanguage: string | null) {
-  const fromLabels = (labels || []).filter((l) => !isBeginnerLabel(l)).slice(0, 6);
-  if (fromLabels.length) return fromLabels;
-
-  const lang = (repoLanguage || "").toLowerCase();
-  if (["javascript", "typescript"].includes(lang)) return ["JavaScript", "React", "Git", "Testing"];
-  if (lang === "python") return ["Python", "Git", "Testing"];
-  return ["Git", "Debugging", "Testing"];
-}
-
-function buildExpectedOutcome(params: {
-  labels: string[];
-  repoLanguage: string | null;
-  status: IssueStatus;
-  issueNumber: number;
-}) {
-  const labels = (params.labels || []).map((l) => l.toLowerCase());
-  const lang = (params.repoLanguage || "").toLowerCase();
-
-  const isBug = labels.some((l) => l.includes("bug") || l.includes("error") || l.includes("crash"));
-  const isDocs = labels.some((l) => l.includes("docs") || l.includes("documentation"));
-  const isTest = labels.some((l) => l.includes("test") || l.includes("testing"));
-  const isSecurity = labels.some((l) => l.includes("security") || l.includes("vuln"));
-  const isRefactor = labels.some((l) => l.includes("refactor") || l.includes("cleanup"));
-  const isFeature = labels.some((l) => l.includes("feature") || l.includes("enhancement") || l.includes("request"));
-
-  const isNode = ["javascript", "typescript"].includes(lang);
-  const isPython = ["python"].includes(lang);
-
-  const out: string[] = [];
-  if (params.status === "closed") out.push("Confirm the issue is resolved and document what changed.");
-
-  if (isBug) {
-    out.push("Reproduce the bug reliably and document steps + environment.");
-    out.push("Fix the bug so runtime completes without errors.");
-  } else if (isFeature) {
-    out.push("Implement the feature and verify it meets acceptance criteria.");
-  }
-
-  if (isDocs) out.push("Update documentation so it matches actual behavior and commands.");
-  if (isSecurity) out.push("Ensure the fix addresses the security concern without leaking sensitive info.");
-  if (isRefactor) out.push("Refactor without changing behavior (validated via checks).");
-
-  out.push(isTest ? "Add/Update tests that fail before and pass after." : "Add/Update tests if applicable.");
-
-  if (isNode) out.push("Run `npm test` (and lint if used) and ensure CI would pass.");
-  else if (isPython) out.push("Run `pytest` and ensure dependencies are correct.");
-  else out.push("Run the project’s build/test steps and confirm expected output.");
-
-  out.push(`Open a PR referencing #${params.issueNumber} with clear verification steps.`);
-
-  return Array.from(new Set(out)).slice(0, 8);
-}
-
-function buildSuggestedResources(params: {
-  labels: string[];
-  body: string;
-  repoLanguage: string | null;
-}) {
-  const labels = (params.labels || []).map((l) => l.toLowerCase());
-  const body = (params.body || "").toLowerCase();
-  const lang = (params.repoLanguage || "").toLowerCase();
-
-  const isReact = labels.some((l) => l.includes("react")) || body.includes("react") || body.includes("suspense") || body.includes("hydration");
-  const isNode = ["javascript", "typescript"].includes(lang);
-  const isPython = lang === "python";
-
-  if (isReact) {
-    return [
-      {
-        title: "React 18 Suspense Docs",
-        url: "https://react.dev/reference/react/Suspense",
-        type: "react.dev/reference/react/Suspense"
-      },
-      {
-        title: "SSR Hydration Guide",
-        url: "https://react.dev/reference/react-dom/client/hydrateRoot",
-        type: "react.dev/reference/react-dom/client/hydrateRoot"
-      },
-      {
-        title: "Discussion: Concurrent Rendering",
-        url: "https://github.com/reactwg/react-18/discussions",
-        type: "Related concurrent mode issue"
-      }
-    ];
-  }
-
-  if (isNode) {
-    return [
-      {
-        title: "GitHub Pull Request Guide",
-        url: "https://docs.github.com/en/pull-requests",
-        type: "docs.github.com"
-      },
-      {
-        title: "Conventional Commits",
-        url: "https://www.conventionalcommits.org/en/v1.0.0/",
-        type: "conventionalcommits.org"
-      },
-      {
-        title: "Writing Tests in JavaScript",
-        url: "https://jestjs.io/docs/getting-started",
-        type: "jestjs.io/docs"
-      }
-    ];
-  }
-
-  if (isPython) {
-    return [
-      {
-        title: "Creating and Running Tests",
-        url: "https://docs.pytest.org/en/stable/getting-started.html",
-        type: "docs.pytest.org"
-      },
-      {
-        title: "GitHub Pull Request Guide",
-        url: "https://docs.github.com/en/pull-requests",
-        type: "docs.github.com"
-      },
-      {
-        title: "How to write a good commit message",
-        url: "https://cbea.ms/git-commit/",
-        type: "cbea.ms/git-commit"
-      }
-    ];
-  }
-
-  return [
-    {
-      title: "GitHub Pull Request Guide",
-      url: "https://docs.github.com/en/pull-requests",
-      type: "docs.github.com"
-    },
-    {
-      title: "How to write a good commit message",
-      url: "https://cbea.ms/git-commit/",
-      type: "cbea.ms/git-commit"
-    },
-    {
-      title: "Issue Triage Best Practices",
-      url: "https://opensource.guide/best-practices/",
-      type: "opensource.guide"
-    }
-  ];
-}
-
-function sameArray(a: any[], b: any[]) {
-  return JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
-}
-
-/**
- * Stable "opened" event (never duplicates).
- */
-function buildOpenedUpdate(ghIssue: any): IssueUpdateItem {
-  return {
-    id: `gh_opened_${String(ghIssue.id)}`,
-    actorLogin: ghIssue.user?.login || "unknown",
-    actorRole: ghIssue.author_association || null,
-    body: "",
-    createdAt: new Date(ghIssue.created_at)
-  };
-}
-
-function mergeIssueUpdates(
-  existing: IssueDocument | null,
-  githubComments: any[],
-  openedUpdate: IssueUpdateItem
-): IssueUpdateItem[] {
-  const existingUpdates = existing?.updates ?? [];
-  const existingIds = new Set(existingUpdates.map((u) => u.id));
-
-  const openCollabEvents = existingUpdates.filter((u) => !u.id.startsWith("gh_"));
-
-  const ghCommentUpdates: IssueUpdateItem[] = (githubComments || [])
-    .filter((c) => typeof c?.body === "string" && c.body.trim().length > 0)
-    .map((c) => ({
-      id: `gh_${String(c.id)}`,
-      actorLogin: c.user?.login || "unknown",
-      actorRole: c.author_association || null,
-      body: c.body,
-      createdAt: new Date(c.created_at)
-    }))
-    .filter((u) => !existingIds.has(u.id));
-
-  const merged = [
-    openedUpdate,
-    ...openCollabEvents.filter((u) => u.id !== openedUpdate.id),
-    ...ghCommentUpdates
-  ];
-
-  merged.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  return merged;
-}
-
-/**
- * Helper: resolve an Issue using the route param.
- * - If param is Mongo ObjectId => findById (works for Sprint 5 ingestion across many repos)
- * - Else if param is numeric => treat as legacy githubNumber for DEFAULT repo (backward compatibility)
- */
-async function findIssueByParam(idParam: string): Promise<IssueDocument | null> {
-  if (mongoose.isValidObjectId(idParam)) {
-    return await Issue.findById(idParam);
-  }
-
-  const githubNumber = Number(idParam);
-  if (!Number.isNaN(githubNumber)) {
-    return await Issue.findOne({
-      repoOwner: DEFAULT_OWNER,
-      repoName: DEFAULT_REPO,
-      githubNumber
-    });
-  }
-
-  return null;
-}
-
-// ------- GitHub -> Mongo sync -------
-async function syncIssueFromGitHub(
-  owner: string,
-  repo: string,
-  githubNumber: number,
-  userToken?: string
-): Promise<IssueDocument | null> {
-  const existing = await Issue.findOne({ repoOwner: owner, repoName: repo, githubNumber });
-
-  const issueUrl = `https://api.github.com/repos/${owner}/${repo}/issues/${githubNumber}`;
-  const ghRes = await axios.get(issueUrl, { headers: ghHeaders(userToken) });
-  const ghIssue = ghRes.data;
-
-  if (ghIssue.pull_request) return null;
-
-  const openedUpdate = buildOpenedUpdate(ghIssue);
-  const ghUpdatedAt = new Date(ghIssue.updated_at);
-
-  const labels: string[] = Array.isArray(ghIssue.labels)
-    ? ghIssue.labels.map((l: any) => l?.name).filter(Boolean)
-    : [];
-
-  const summary =
-    typeof ghIssue.body === "string" && ghIssue.body.trim().length > 0
-      ? ghIssue.body.slice(0, 240)
-      : ghIssue.title;
-
-  const status: IssueStatus = ghIssue.state === "open" ? "open" : "closed";
-  const recentlyUpdated = Date.now() - ghUpdatedAt.getTime() < 1000 * 60 * 60 * 24 * 14;
-
-  const commentsUrl = `https://api.github.com/repos/${owner}/${repo}/issues/${githubNumber}/comments?per_page=50`;
-  const commentsRes = await axios.get(commentsUrl, { headers: ghHeaders(userToken) });
-  const comments: any[] = Array.isArray(commentsRes.data) ? commentsRes.data : [];
-
-  const repoMeta = await getRepoMeta(owner, repo, userToken);
-
-  const requiredSkills = buildRequiredSkills(labels, repoMeta?.language || null);
-  const expectedOutcome = buildExpectedOutcome({
-    labels,
-    repoLanguage: repoMeta?.language || null,
-    status,
-    issueNumber: githubNumber
-  });
-
-  const gitFlowCommands = buildGitFlowCommands(owner, repo, githubNumber, repoMeta);
-  const projectSetupCommands = buildProjectSetupCommands(repoMeta);
-
-  const suggestedResources = buildSuggestedResources({
-    labels,
-    body: ghIssue.body || "",
-    repoLanguage: repoMeta?.language || null
-  });
-
-  const baseData = {
-    githubNumber,
-    repoOwner: owner,
-    repoName: repo,
-    title: ghIssue.title,
-    body: ghIssue.body || "",
-    summary,
-    labels,
-    githubUrl: ghIssue.html_url,
-    githubCreatedAt: new Date(ghIssue.created_at),
-    githubUpdatedAt: ghUpdatedAt,
-    openedAt: new Date(ghIssue.created_at),
-    recentlyUpdated
-  };
-
-  const beginnerFriendly = labels.some(isBeginnerLabel);
-
-  // If unchanged in GitHub updatedAt, still merge comments (safe) and update lastSyncedAt
-  if (existing && existing.githubUpdatedAt?.getTime() === ghUpdatedAt.getTime()) {
-    const mergedUpdates = mergeIssueUpdates(existing, comments, openedUpdate);
-
-    const needSave =
-      !sameArray(existing.requiredSkills, requiredSkills) ||
-      !sameArray(existing.expectedOutcome, expectedOutcome) ||
-      !sameArray(existing.autoSetupCommands, gitFlowCommands) ||
-      !sameArray((existing as any).projectSetupCommands || [], projectSetupCommands) ||
-      !sameArray(existing.updates, mergedUpdates);
-
-    if (needSave) {
-      existing.requiredSkills = requiredSkills;
-      existing.expectedOutcome = expectedOutcome;
-      existing.autoSetupCommands = gitFlowCommands;
-      (existing as any).projectSetupCommands = projectSetupCommands;
-      existing.suggestedResources = suggestedResources;
-      existing.updates = mergedUpdates;
-    }
-
-    existing.lastSyncedAt = new Date(); // ✅ always update last sync time
-    await existing.save();
-    return existing;
-  }
-
-  if (!existing) {
-    const created = await Issue.create({
-      ...baseData,
-      status,
-      lastSyncedAt: new Date(),
-
-      repoHealth: {
-        healthScore: 85,
-        activityScore: 80,
-        openIssues: repoMeta?.open_issues_count ?? 0,
-        recentCommits: 0
-      },
-
-      beginnerFriendly,
-      activeMaintainer: true,
-
-      requiredSkills,
-      expectedOutcome,
-      suggestedResources,
-
-      autoSetupCommands: gitFlowCommands,
-      projectSetupCommands,
-
-      prStatus: "NONE",
-      notifyWatchers: [],
-
-      updates: mergeIssueUpdates(null, comments, openedUpdate),
-      contributionTimeline: []
-    });
-
-    return created;
-  }
-
-  // Update GitHub fields
-  existing.title = baseData.title;
-  existing.body = baseData.body;
-  existing.summary = baseData.summary;
-  existing.labels = baseData.labels;
-  existing.githubUrl = baseData.githubUrl;
-  existing.githubCreatedAt = baseData.githubCreatedAt;
-  existing.githubUpdatedAt = baseData.githubUpdatedAt;
-  existing.openedAt = baseData.openedAt;
-  existing.recentlyUpdated = baseData.recentlyUpdated;
-
-  existing.beginnerFriendly = beginnerFriendly;
-  existing.requiredSkills = requiredSkills;
-  existing.expectedOutcome = expectedOutcome;
-  existing.suggestedResources = suggestedResources;
-
-  existing.autoSetupCommands = gitFlowCommands;
-  (existing as any).projectSetupCommands = projectSetupCommands;
-
-  existing.updates = mergeIssueUpdates(existing, comments, openedUpdate);
-
-  if (status === "closed") existing.status = "closed";
-
-  existing.lastSyncedAt = new Date();
-  await existing.save();
-  return existing;
-}
-
+// GET /api/issues/stats
 router.get("/stats", authRequired, async (_req: AuthRequest, res: Response) => {
   try {
-    const total = await Issue.countDocuments({});
-    const open = await Issue.countDocuments({ status: "open" });
-    const beginner = await Issue.countDocuments({ beginnerFriendly: true });
-
-    return res.json({ total, open, beginner });
+    const stats = await issuesService.getStats();
+    return res.json(stats);
   } catch (err) {
     console.error("GET /api/issues/stats error:", err);
     return res.status(500).json({ message: "Failed to load stats" });
   }
 });
 
-router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
-  try {
-    const {
-      page = "1",
-      limit = "10",
-      status,
-      language,
-      difficulty,
-      search,
-      sort = "newest"
-    } = req.query as Record<string, string | undefined>;
+// GET /api/issues - List issues with pagination/filters
+router.get(
+  "/",
+  authRequired,
+  validate(listIssuesSchema),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { page, limit, status, language, difficulty, search, sort } = req.validated!.query;
 
-    const pageNum = Math.max(1, parseInt(page || "1", 10));
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit || "10", 10)));
-    const skip = (pageNum - 1) * limitNum;
-
-    // Build filter
-    const filter: Record<string, any> = {};
-
-    if (status && ["open", "claimed", "closed"].includes(status)) {
-      filter.status = status;
-    }
-
-    if (language) {
-      const langs = language.split(",").map((l) => l.trim()).filter(Boolean);
-      if (langs.length > 0) {
-        filter.$or = langs.map((l) => ({
-          $or: [
-            { labels: { $regex: new RegExp(l, "i") } },
-            { requiredSkills: { $regex: new RegExp(l, "i") } }
-          ]
-        }));
-      }
-    }
-
-    if (difficulty) {
-      if (difficulty === "beginner") {
-        filter.beginnerFriendly = true;
-      }
-    }
-
-    if (search && search.trim()) {
-      const s = search.trim();
-      filter.$and = [
-        ...(filter.$and || []),
-        {
-          $or: [
-            { title: { $regex: new RegExp(s, "i") } },
-            { repoName: { $regex: new RegExp(s, "i") } },
-            { repoOwner: { $regex: new RegExp(s, "i") } },
-            { summary: { $regex: new RegExp(s, "i") } }
-          ]
-        }
-      ];
-    }
-
-    // Sort
-    let sortObj: Record<string, 1 | -1> = { githubUpdatedAt: -1 };
-    if (sort === "oldest") sortObj = { githubUpdatedAt: 1 };
-    else if (sort === "recently-created") sortObj = { githubCreatedAt: -1 };
-
-    const [issues, total] = await Promise.all([
-      Issue.find(filter)
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limitNum)
-        .select(
-          "_id githubNumber repoOwner repoName title body summary status labels " +
-          "requiredSkills beginnerFriendly githubCreatedAt githubUpdatedAt " +
-          "claimedByLogin githubUrl"
-        ),
-      Issue.countDocuments(filter)
-    ]);
-
-    return res.json({
-      issues,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum)
-      }
-    });
-  } catch (err) {
-    console.error("GET /api/issues error:", err);
-    return res.status(500).json({ message: "Failed to load issues list" });
-  }
-});
-
-// ------- Routes -------
-
-// ✅ GET issue by Mongo _id OR legacy githubNumber
-router.get("/:id", authRequired, async (req: AuthRequest, res: Response) => {
-  const idParam = req.params.id;
-
-  try {
-    // Backward compatible: if githubNumber and not in DB, fetch once for default repo
-    const githubNumber = Number(idParam);
-    if (!Number.isNaN(githubNumber)) {
-      const fromDb = await Issue.findOne({
-        repoOwner: DEFAULT_OWNER,
-        repoName: DEFAULT_REPO,
-        githubNumber
+      const result = await issuesService.listIssues({
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        status,
+        language,
+        difficulty,
+        search,
+        sort
       });
-      if (fromDb) return res.json(fromDb);
 
-      const user = await User.findById(req.userId).select("githubAccessToken");
-      const userToken = user?.githubAccessToken || undefined;
+      return res.json(result);
+    } catch (err) {
+      console.error("GET /api/issues error:", err);
+      return res.status(500).json({ message: "Failed to load issues list" });
+    }
+  }
+);
 
-      const issue = await syncIssueFromGitHub(DEFAULT_OWNER, DEFAULT_REPO, githubNumber, userToken);
-      if (!issue) return res.status(404).json({ message: "Issue not found" });
+// GET /api/issues/:id - Get single issue
+router.get(
+  "/:id",
+  authRequired,
+  validate(getIssueSchema),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const idParam = req.validated!.params.id;
+
+      if (!mongoose.isValidObjectId(idParam) && Number.isNaN(Number(idParam))) {
+        return res.status(400).json({ message: "Invalid issue id" });
+      }
+
+      const { issue } = await issuesService.getIssueById(idParam, req.userId);
+
+      if (!issue) {
+        return res.status(404).json({ message: "Issue not found" });
+      }
 
       return res.json(issue);
+    } catch (err) {
+      console.error("GET /api/issues/:id error:", err);
+      return res.status(500).json({ message: "Failed to load issue" });
     }
-
-    // Otherwise: Mongo ObjectId path
-    if (!mongoose.isValidObjectId(idParam)) {
-      return res.status(400).json({ message: "Invalid issue id" });
-    }
-
-    const issueById = await Issue.findById(idParam);
-    if (!issueById) return res.status(404).json({ message: "Issue not found" });
-
-    return res.json(issueById);
-  } catch (err) {
-    console.error("GET /api/issues/:id error:", err);
-    return res.status(500).json({ message: "Failed to load issue" });
   }
-});
+);
 
-// ✅ Refresh works for Mongo _id and legacy githubNumber
-router.post("/:id/refresh", authRequired, async (req: AuthRequest, res: Response) => {
-  try {
-    const issue = await findIssueByParam(req.params.id);
-    if (!issue) return res.status(404).json({ message: "Issue not found" });
-
-    // cooldown
-    const last = issue.lastSyncedAt ? new Date(issue.lastSyncedAt).getTime() : 0;
-    const now = Date.now();
-
-    if (last && now - last < REFRESH_COOLDOWN_MS) {
-      return res.status(429).json({
-        message: "Refresh allowed once every 10 minutes",
-        nextAllowedInSec: Math.ceil((REFRESH_COOLDOWN_MS - (now - last)) / 1000)
-      });
-    }
-
-    const user = await User.findById(req.userId).select("githubAccessToken");
-    const userToken = user?.githubAccessToken || undefined;
-
-    // Refresh using the actual issue identity (supports many repos)
-    const refreshed = await syncIssueFromGitHub(
-      issue.repoOwner,
-      issue.repoName,
-      issue.githubNumber,
-      userToken
-    );
-    if (!refreshed) return res.status(404).json({ message: "Issue not found" });
-
-    return res.json({ message: "Issue refreshed", issue: refreshed });
-  } catch (err) {
-    console.error("POST /api/issues/:id/refresh error:", err);
-    return res.status(500).json({ message: "Failed to refresh issue" });
-  }
-});
-
-// ✅ Claim works for Mongo _id and legacy githubNumber
-router.post("/:id/claim", authRequired, async (req: AuthRequest, res: Response) => {
-  if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
-
-  try {
-    const issue = await findIssueByParam(req.params.id);
-    if (!issue) return res.status(404).json({ message: "Issue not found" });
-    if (issue.status === "closed") return res.status(400).json({ message: "Issue is closed." });
-
-    const user = await User.findById(req.userId).select("login");
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    const displayName = user.login || req.userId;
-
-    if (issue.status === "claimed" && issue.claimedByUserId !== req.userId) {
-      return res.status(403).json({ message: `Issue already claimed by ${issue.claimedByLogin}.` });
-    }
-    if (issue.status === "claimed" && issue.claimedByUserId === req.userId) {
-      return res.status(200).json({ message: "Issue already claimed by this user.", issue });
-    }
-
-    issue.status = "claimed";
-    issue.claimedByUserId = req.userId;
-    issue.claimedByLogin = displayName;
-    issue.claimedAt = new Date();
-
-    issue.contributionTimeline = [
-      {
-        id: shortId("tl"),
-        title: "Issue accepted in OpenCollab",
-        status: "ACCEPTED",
-        at: new Date(),
-        meta: null
+// POST /api/issues/:id/refresh - Refresh issue from GitHub
+router.post(
+  "/:id/refresh",
+  authRequired,
+  validate(refreshIssueSchema),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({ message: "Unauthorized" });
       }
-    ];
 
-    issue.updates.push({
-      id: shortId("claim"),
-      actorLogin: displayName,
-      actorRole: "OPENCOLLAB",
-      body: `${displayName} claimed this issue`,
-      createdAt: new Date()
-    });
+      const result = await issuesService.refreshIssue(req.validated!.params.id, req.userId);
 
-    await issue.save();
-    return res.status(200).json({ message: "Issue successfully claimed.", issue });
-  } catch (err) {
-    console.error("POST /api/issues/:id/claim error:", err);
-    return res.status(500).json({ message: "Failed to claim this issue." });
+      if (!result.success) {
+        if (result.retryAfterSec) {
+          return res.status(429).json({
+            message: result.error,
+            nextAllowedInSec: result.retryAfterSec
+          });
+        }
+        return res.status(404).json({ message: result.error });
+      }
+
+      return res.json({ message: "Issue refreshed", issue: result.issue });
+    } catch (err) {
+      console.error("POST /api/issues/:id/refresh error:", err);
+      return res.status(500).json({ message: "Failed to refresh issue" });
+    }
   }
-});
+);
 
-// ✅ Abort works for Mongo _id and legacy githubNumber
-router.post("/:id/abort", authRequired, async (req: AuthRequest, res: Response) => {
-  if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
-
-  try {
-    const issue = await findIssueByParam(req.params.id);
-    if (!issue) return res.status(404).json({ message: "Issue not found" });
-
-    if (issue.status !== "claimed" || !issue.claimedByUserId) {
-      return res.status(400).json({ message: "Issue is not currently claimed." });
+// POST /api/issues/:id/claim - Claim an issue
+router.post(
+  "/:id/claim",
+  authRequired,
+  validate(claimIssueSchema),
+  async (req: AuthRequest, res: Response) => {
+    if (!req.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (issue.claimedByUserId !== req.userId) {
-      return res.status(403).json({ message: "You cannot abort an issue claimed by someone else." });
+    try {
+      const result = await issuesService.claimIssue(req.validated!.params.id, req.userId);
+      return res.status(result.status).json(result.data);
+    } catch (err) {
+      console.error("POST /api/issues/:id/claim error:", err);
+      return res.status(500).json({ message: "Failed to claim this issue." });
     }
-
-    const who = issue.claimedByLogin || "unknown";
-
-    issue.status = "open";
-    issue.claimedByUserId = null;
-    issue.claimedByLogin = null;
-    issue.claimedAt = null;
-
-    issue.contributionTimeline = [];
-
-    issue.updates.push({
-      id: shortId("abort"),
-      actorLogin: who,
-      actorRole: "OPENCOLLAB",
-      body: `${who} aborted this issue`,
-      createdAt: new Date()
-    });
-
-    const now = new Date().toISOString();
-    issue.notifyWatchers.forEach((watcherUserId) => {
-      const notification: NotificationDto = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        userId: watcherUserId,
-        type: "ISSUE_AVAILABLE",
-        issueId: String(issue.githubNumber), // keep your existing semantics
-        issueTitle: issue.title,
-        createdAt: now,
-        read: false
-      };
-      notifications.push(notification);
-    });
-
-    issue.notifyWatchers = [];
-    await issue.save();
-
-    return res.status(200).json({ message: "Issue successfully aborted.", issue });
-  } catch (err) {
-    console.error("POST /api/issues/:id/abort error:", err);
-    return res.status(500).json({ message: "Failed to abort this issue." });
   }
-});
+);
 
-// ✅ Notify works for Mongo _id and legacy githubNumber
-router.post("/:id/notify", authRequired, async (req: AuthRequest, res: Response) => {
-  if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
-
-  try {
-    const issue = await findIssueByParam(req.params.id);
-    if (!issue) return res.status(404).json({ message: "Issue not found" });
-
-    if (issue.status === "open") {
-      return res.status(400).json({ message: "Issue is already open – you can claim it now." });
+// POST /api/issues/:id/abort - Abort a claimed issue
+router.post(
+  "/:id/abort",
+  authRequired,
+  validate(abortIssueSchema),
+  async (req: AuthRequest, res: Response) => {
+    if (!req.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!issue.notifyWatchers.includes(req.userId)) {
-      issue.notifyWatchers.push(req.userId);
-      await issue.save();
+    try {
+      const result = await issuesService.abortIssue(req.validated!.params.id, req.userId);
+      return res.status(result.status).json(result.data);
+    } catch (err) {
+      console.error("POST /api/issues/:id/abort error:", err);
+      return res.status(500).json({ message: "Failed to abort this issue." });
     }
-
-    return res.status(200).json({
-      message: "You will be notified when this issue becomes available.",
-      issue
-    });
-  } catch (err) {
-    console.error("POST /api/issues/:id/notify error:", err);
-    return res.status(500).json({ message: "Failed to set notification for this issue." });
   }
-});
+);
+
+// POST /api/issues/:id/notify - Subscribe to notifications
+router.post(
+  "/:id/notify",
+  authRequired,
+  validate(notifyIssueSchema),
+  async (req: AuthRequest, res: Response) => {
+    if (!req.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const result = await issuesService.notifyOnIssue(req.validated!.params.id, req.userId);
+      return res.status(result.status).json(result.data);
+    } catch (err) {
+      console.error("POST /api/issues/:id/notify error:", err);
+      return res.status(500).json({ message: "Failed to set notification for this issue." });
+    }
+  }
+);
 
 export default router;

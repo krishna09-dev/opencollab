@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   fetchGoodFirstIssues,
-  fetchRecommendedGoodFirstIssues
+  fetchRecommendedGoodFirstIssues,
+  fetchDifficultyCounts
 } from "../api/goodFirstIssuesApi";
 import type {
   GoodFirstIssue,
@@ -29,6 +30,9 @@ export function useGoodFirstIssues() {
   // Recommended issues state
   const [recommended, setRecommended] = useState<GoodFirstIssue[]>([]);
   const [recommendedLoading, setRecommendedLoading] = useState(false);
+
+  // Global difficulty counts (across all issues, not just current page)
+  const [difficultyCounts, setDifficultyCounts] = useState({ beginner: 0, intermediate: 0, advanced: 0 });
 
   // View mode: "recommended" or "browse"
   const [viewMode, setViewMode] = useState<"recommended" | "browse">("recommended");
@@ -87,6 +91,7 @@ export function useGoodFirstIssues() {
 
     loadRecommended();
     loadIssues();
+    fetchDifficultyCounts().then(setDifficultyCounts).catch(() => {});
   }, [navigate, loadRecommended, loadIssues]);
 
   // Reload recommendations when user level changes
@@ -119,13 +124,6 @@ export function useGoodFirstIssues() {
   const filterByDifficulty = useCallback((difficulty?: DifficultyLevel) => {
     updateFilters({ difficulty, page: 1 });
   }, [updateFilters]);
-
-  // Calculate counts by difficulty from all issues
-  const difficultyCounts = {
-    beginner: issues.filter(i => i.difficulty === "beginner").length,
-    intermediate: issues.filter(i => i.difficulty === "intermediate").length,
-    advanced: issues.filter(i => i.difficulty === "advanced").length
-  };
 
   return {
     // User level

@@ -66,9 +66,19 @@ export async function fetchGoodFirstIssues(
   filters: GoodFirstIssuesFilters = {}
 ): Promise<GoodFirstIssuesResponse> {
   const params = new URLSearchParams();
+  const needsClientFilter = filters.difficulty && filters.difficulty !== "beginner";
+  const page = filters.page || 1;
+  const limit = filters.limit || 10;
 
-  if (filters.page) params.set("page", String(filters.page));
-  if (filters.limit) params.set("limit", String(filters.limit));
+  if (needsClientFilter) {
+    // Fetch a large batch for client-side difficulty filtering (must match fetchDifficultyCounts limit)
+    params.set("page", "1");
+    params.set("limit", "500");
+  } else {
+    if (filters.page) params.set("page", String(filters.page));
+    if (filters.limit) params.set("limit", String(filters.limit));
+  }
+
   if (filters.language) params.set("language", filters.language);
   if (filters.search) params.set("search", filters.search);
 
@@ -91,27 +101,59 @@ export async function fetchGoodFirstIssues(
     difficulty: calculateDifficulty(issue)
   }));
 
-  // If filtering by difficulty (not beginner which is already filtered server-side)
-  let filteredIssues = enrichedIssues;
-  if (filters.difficulty && filters.difficulty !== "beginner") {
-    filteredIssues = enrichedIssues.filter(
+  // If filtering by non-beginner difficulty, do client-side filtering with proper pagination
+  if (needsClientFilter) {
+    const allFiltered = enrichedIssues.filter(
       issue => issue.difficulty === filters.difficulty
     );
+    const total = allFiltered.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const startIdx = (page - 1) * limit;
+    const paginatedIssues = allFiltered.slice(startIdx, startIdx + limit);
+
+    return {
+      issues: paginatedIssues,
+      pagination: { page, limit, total, totalPages }
+    };
   }
 
   return {
-    issues: filteredIssues,
+    issues: enrichedIssues,
     pagination: res.data.pagination
   };
+}
+
+export interface DifficultyCounts {
+  beginner: number;
+  intermediate: number;
+  advanced: number;
+}
+
+/**
+ * Fetches a large batch of open issues and counts them by computed difficulty.
+ * Used for the sidebar stats panel.
+ */
+export async function fetchDifficultyCounts(): Promise<DifficultyCounts> {
+  const res = await api.get<{ issues: any[] }>(
+    `/api/issues?status=open&limit=500`,
+    { headers: authHeaders() }
+  );
+
+  const counts: DifficultyCounts = { beginner: 0, intermediate: 0, advanced: 0 };
+  for (const issue of res.data.issues) {
+    const diff = calculateDifficulty(issue);
+    counts[diff]++;
+  }
+  return counts;
 }
 
 export async function fetchRecommendedGoodFirstIssues(
   userLevel: DifficultyLevel,
   topN: number = 10
 ): Promise<GoodFirstIssue[]> {
-  // Fetch all open issues
+  // Fetch a large pool so we have enough after difficulty filtering
   const res = await api.get<{ issues: any[]; pagination: GoodFirstIssuesPagination }>(
-    `/api/issues?status=open&limit=50`,
+    `/api/issues?status=open&limit=500`,
     { headers: authHeaders() }
   );
 
@@ -121,31 +163,10 @@ export async function fetchRecommendedGoodFirstIssues(
     difficulty: calculateDifficulty(issue)
   }));
 
-  // Recommendation logic based on user skill level
-  let recommended: GoodFirstIssue[] = [];
-
-  if (userLevel === "beginner") {
-    // For beginners: show only beginner issues, sorted by simplicity
-    recommended = enrichedIssues
-      .filter(i => i.difficulty === "beginner")
-      .sort((a, b) => {
-        // Prioritize issues with fewer required skills
-        const skillsA = (a.requiredSkills || []).length;
-        const skillsB = (b.requiredSkills || []).length;
-        return skillsA - skillsB;
-      });
-  } else if (userLevel === "intermediate") {
-    // For intermediate: show beginner and intermediate, prioritize intermediate
-    const intermediate = enrichedIssues.filter(i => i.difficulty === "intermediate");
-    const beginner = enrichedIssues.filter(i => i.difficulty === "beginner");
-    recommended = [...intermediate, ...beginner];
-  } else {
-    // For advanced: show all difficulties, prioritize advanced and intermediate
-    const advanced = enrichedIssues.filter(i => i.difficulty === "advanced");
-    const intermediate = enrichedIssues.filter(i => i.difficulty === "intermediate");
-    const beginner = enrichedIssues.filter(i => i.difficulty === "beginner");
-    recommended = [...advanced, ...intermediate, ...beginner];
-  }
+  // Only show issues that match the user's selected level
+  const recommended = enrichedIssues
+    .filter(i => i.difficulty === userLevel)
+    .sort((a, b) => (a.requiredSkills || []).length - (b.requiredSkills || []).length);
 
   // Add match scores based on position
   return recommended.slice(0, topN).map((issue, index) => ({

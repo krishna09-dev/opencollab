@@ -10,12 +10,12 @@ import issuesRouter from "./routes/issues.routes";
 import notificationsRouter from "./routes/notifications.routes";
 import resourcesRoutes from "./routes/resources.routes";
 import prTrackingRoutes from "./routes/prTracking.routes";
-import seedRoutes from "./routes/seed.routes";
 import recommendationsRoutes from "./routes/recommendations.routes";
 
 // Sprint 5
 import ingestionRoutes from "./routes/ingestion.routes";
 import { startIssueIngestionWorker } from "./workers/issueIngestion.worker";
+import { startPrSyncWorker } from "./workers/prSync.worker";
 
 dotenv.config();
 
@@ -39,7 +39,6 @@ app.use("/api/issues", issuesRouter);
 app.use("/api", notificationsRouter);
 app.use("/api/resources", resourcesRoutes);
 app.use("/api/pr-tracking", prTrackingRoutes);
-app.use("/api/seed-all", seedRoutes);
 app.use("/api/recommendations", recommendationsRoutes);
 
 
@@ -53,8 +52,9 @@ app.get("/health", (_req, res) => {
 
 // Start server
 connectDB().then(() => {
-  // Start ingestion worker after DB is ready
+  // Start workers after DB is ready
   startIssueIngestionWorker();
+  startPrSyncWorker();
 
   app.listen(PORT, () => {
     console.log(`🚀 API running at http://localhost:${PORT}`);

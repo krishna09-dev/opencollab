@@ -22,6 +22,7 @@ import ContributionTimeline from "../components/ContributionTimeline";
 import IssueStatusCard from "../components/IssueStatusCard";
 import SuggestedResourcesCard from "../components/SuggestedResourcesCard";
 import IssueActions from "../components/IssueActions";
+import PrTrackingCard from "../components/PrTrackingCard";
 
 export default function IssueDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -143,6 +144,8 @@ export default function IssueDetailPage() {
                 handleAbort={handleAbort}
                 handleNotify={handleNotify}
               />
+
+              <PrTrackingCard issueId={issue._id} showToast={showToast} />
 
               <SuggestedResourcesCard issue={issue} />
 

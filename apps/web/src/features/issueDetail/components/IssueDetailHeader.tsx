@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Avatar,
   Badge,
@@ -5,6 +6,8 @@ import {
   Button,
   Divider,
   IconButton,
+  Menu,
+  MenuItem,
   Stack,
   Typography
 } from "@mui/material";
@@ -19,6 +22,7 @@ type Props = {
 
 export default function IssueDetailHeader({ currentUser, unreadCount }: Props) {
   const navigate = useNavigate();
+  const [profileAnchor, setProfileAnchor] = useState<null | HTMLElement>(null);
 
   return (
     <Box
@@ -81,11 +85,9 @@ export default function IssueDetailHeader({ currentUser, unreadCount }: Props) {
               <MSym name="notifications" sx={{ fontSize: 19 }} />
             </Badge>
           </IconButton>
-          <IconButton sx={{ color: "#a1a1aa" }}>
-            <MSym name="add_circle" sx={{ fontSize: 19 }} />
-          </IconButton>
           <Divider orientation="vertical" flexItem sx={{ borderColor: "#27272a", mx: 0.5 }} />
           <Button
+            onClick={(e) => setProfileAnchor(e.currentTarget)}
             sx={{ textTransform: "none", color: "#fff", borderRadius: "14px", px: 1, minWidth: 0, gap: 1, "&:hover": { bgcolor: "rgba(255,255,255,0.06)" } }}
             startIcon={<Avatar src={currentUser?.avatarUrl} sx={{ width: 32, height: 32 }} />}
             endIcon={<MSym name="keyboard_arrow_down" sx={{ color: "#a1a1aa", fontSize: 18 }} />}
@@ -94,6 +96,41 @@ export default function IssueDetailHeader({ currentUser, unreadCount }: Props) {
               {currentUser?.login || "user"}
             </Typography>
           </Button>
+          <Menu
+            anchorEl={profileAnchor}
+            open={Boolean(profileAnchor)}
+            onClose={() => setProfileAnchor(null)}
+            PaperProps={{
+              sx: {
+                mt: 1,
+                bgcolor: "#0b0f17",
+                border: "1px solid #27272a",
+                borderRadius: "12px",
+                minWidth: 180,
+                color: "#fff"
+              }
+            }}
+          >
+            <MenuItem
+              onClick={() => { setProfileAnchor(null); navigate("/profile"); }}
+              sx={{ fontSize: 14, gap: 1.5, "&:hover": { bgcolor: "rgba(255,255,255,0.05)" } }}
+            >
+              <MSym name="person" sx={{ fontSize: 18, color: "#a1a1aa" }} />
+              Your Profile
+            </MenuItem>
+            <Divider sx={{ borderColor: "#27272a" }} />
+            <MenuItem
+              onClick={() => {
+                setProfileAnchor(null);
+                localStorage.clear();
+                window.location.href = "/login";
+              }}
+              sx={{ fontSize: 14, gap: 1.5, color: "#f87171", "&:hover": { bgcolor: "rgba(248,113,113,0.1)" } }}
+            >
+              <MSym name="logout" sx={{ fontSize: 18 }} />
+              Logout
+            </MenuItem>
+          </Menu>
         </Stack>
       </Stack>
     </Box>
