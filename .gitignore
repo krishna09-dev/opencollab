@@ -8,3 +8,4 @@ package-lock.json.DS_Store
 .DS_Store
 __pycache__/
 *.pyc
+apps/ml/venv/
