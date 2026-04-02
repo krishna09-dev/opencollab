@@ -19,11 +19,6 @@ type CurrentUser = {
   avatarUrl?: string;
 };
 
-type NotificationDto = {
-  id: string;
-  read: boolean;
-};
-
 function MSym({ name, sx }: { name: string; sx?: any }) {
   return (
     <Box

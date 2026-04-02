@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Avatar,
   Badge,
@@ -15,13 +15,19 @@ import {
 } from "@mui/material";
 
 import MSym from "../../features/resources/components/MSym";
-import { fetchCurrentUser } from "../../features/issueDetail/api/issueDetailApi";
+import {
+  fetchCurrentUser,
+  fetchNotifications,
+  markAllNotificationsRead
+} from "../../features/issueDetail/api/issueDetailApi";
+import type { NotificationDto } from "../../features/issueDetail/types";
 
-type CurrentUser = { login?: string; avatarUrl?: string } | null;
+type CurrentUser = { login?: string; avatarUrl?: string; role?: string } | null;
 
 const NAV_ITEMS = [
   { label: "Trending Issues", icon: "explore", path: "/feed" },
   { label: "Good First Issues", icon: "partner_exchange", path: "/good-first-issues" },
+  { label: "Claimed Issues", icon: "assignment_ind", path: "/profile/claimed-issues" },
   { label: "Learning Resources", icon: "school", path: "/resources" },
   { label: "Pull Requests", icon: "fork_right", path: "/pr-tracking" },
   { label: "Saved Issues", icon: "bookmark", path: "/saved" }
@@ -32,24 +38,72 @@ export default function AppLayout({
   sidebarExtra,
   children
 }: {
-  activePage: "feed" | "resources" | "pr-tracking" | "pr-detail" | "good-first-issues" | "saved";
+  activePage: "feed" | "resources" | "pr-tracking" | "pr-detail" | "good-first-issues" | "claimed-issues" | "saved" | "profile";
   sidebarExtra?: ReactNode;
   children: ReactNode;
 }) {
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
+  const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [profileAnchor, setProfileAnchor] = useState<null | HTMLElement>(null);
+  const [notificationsAnchor, setNotificationsAnchor] = useState<null | HTMLElement>(null);
+
+  const unreadCount = notifications.filter((notification) => !notification.read).length;
+
+  const loadNotifications = async () => {
+    try {
+      const data = await fetchNotifications();
+      setNotifications(data);
+    } catch {
+      setNotifications([]);
+    }
+  };
+
+  const markNotificationsReadAll = async () => {
+    try {
+      const data = await markAllNotificationsRead();
+      setNotifications(data.notifications || []);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const openNotifications = async (event: MouseEvent<HTMLElement>) => {
+    setNotificationsAnchor(event.currentTarget);
+    await loadNotifications();
+  };
+
+  const closeNotifications = () => setNotificationsAnchor(null);
+
+  const handleMarkAllRead = async (event: MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    await markNotificationsReadAll();
+  };
+
+  const formatNotificationDate = (createdAt: string) => {
+    const value = new Date(createdAt);
+    if (Number.isNaN(value.getTime())) return "Just now";
+    return value.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  };
+
   useEffect(() => {
     fetchCurrentUser()
-      .then((u) => setCurrentUser({ login: u.login, avatarUrl: u.avatarUrl }))
+      .then((u) => setCurrentUser({ login: u.login, avatarUrl: u.avatarUrl, role: u.role }))
       .catch(() => setCurrentUser(null));
+    loadNotifications();
   }, []);
 
   function isActive(item: typeof NAV_ITEMS[number]) {
     if (item.label === "Trending Issues" && activePage === "feed") return true;
     if (item.label === "Good First Issues" && activePage === "good-first-issues") return true;
+    if (item.label === "Claimed Issues" && activePage === "claimed-issues") return true;
     if (item.label === "Learning Resources" && activePage === "resources") return true;
     if (item.label === "Pull Requests" && (activePage === "pr-tracking" || activePage === "pr-detail")) return true;
     if (item.label === "Saved Issues" && activePage === "saved") return true;
@@ -86,9 +140,9 @@ export default function AppLayout({
         </Stack>
 
         <Stack direction="row" spacing={1.5} alignItems="center">
-          <IconButton sx={{ color: "#a1a1aa" }}>
+          <IconButton sx={{ color: "#a1a1aa" }} onClick={openNotifications}>
             <Badge
-              variant="dot"
+              variant={unreadCount > 0 ? "dot" : "standard"}
               color="success"
               sx={{
                 "& .MuiBadge-badge": {
@@ -102,6 +156,106 @@ export default function AppLayout({
               <MSym name="notifications" sx={{ fontSize: 19 }} />
             </Badge>
           </IconButton>
+          <Menu
+            anchorEl={notificationsAnchor}
+            open={Boolean(notificationsAnchor)}
+            onClose={closeNotifications}
+            PaperProps={{
+              sx: {
+                mt: 1,
+                width: 360,
+                maxWidth: "92vw",
+                maxHeight: 420,
+                bgcolor: "#0b0f17",
+                border: "1px solid #27272a",
+                borderRadius: "12px",
+                color: "#fff"
+              }
+            }}
+          >
+            <Box
+              sx={{
+                px: 1.5,
+                pt: 1.25,
+                pb: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1
+              }}
+            >
+              <Typography sx={{ fontSize: 14, fontWeight: 700 }}>Notifications</Typography>
+              <Button
+                size="small"
+                onClick={handleMarkAllRead}
+                disabled={unreadCount === 0}
+                sx={{
+                  textTransform: "none",
+                  minWidth: 0,
+                  px: 1,
+                  fontSize: 12,
+                  color: "#19e66b",
+                  "&.Mui-disabled": { color: "#6b7280" }
+                }}
+              >
+                Mark all read
+              </Button>
+            </Box>
+            <Divider sx={{ borderColor: "#27272a" }} />
+
+            {notifications.length === 0 ? (
+              <Box sx={{ px: 2, py: 2.5 }}>
+                <Typography sx={{ fontSize: 13, color: "#a1a1aa" }}>No notifications yet.</Typography>
+              </Box>
+            ) : (
+              notifications.map((notification) => (
+                <MenuItem
+                  key={notification.id}
+                  onClick={async () => {
+                    if (!notification.read) {
+                      await markNotificationsReadAll();
+                    }
+                    closeNotifications();
+                    navigate(`/issues/${notification.issueId}`);
+                  }}
+                  sx={{
+                    alignItems: "flex-start",
+                    py: 1.25,
+                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    "&:last-of-type": { borderBottom: "none" },
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.05)" }
+                  }}
+                >
+                  <Stack spacing={0.5} sx={{ width: "100%", minWidth: 0 }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff" }} noWrap>
+                        {notification.issueTitle}
+                      </Typography>
+                      {!notification.read && (
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 999,
+                            flexShrink: 0,
+                            bgcolor: "#19e66b"
+                          }}
+                        />
+                      )}
+                    </Stack>
+
+                    <Typography sx={{ fontSize: 12, color: "#cbd5e1" }}>
+                      Issue is available to claim again.
+                    </Typography>
+
+                    <Typography sx={{ fontSize: 11, color: "#6b7280" }}>
+                      {formatNotificationDate(notification.createdAt)}
+                    </Typography>
+                  </Stack>
+                </MenuItem>
+              ))
+            )}
+          </Menu>
           <Divider orientation="vertical" flexItem sx={{ borderColor: "#27272a", mx: 0.5 }} />
           <Button
             onClick={(e) => setProfileAnchor(e.currentTarget)}
@@ -133,6 +287,33 @@ export default function AppLayout({
               <MSym name="person" sx={{ fontSize: 18, color: "#a1a1aa" }} />
               Your Profile
             </MenuItem>
+            {(currentUser?.role === "admin" || currentUser?.role === "moderator") && (
+              <MenuItem
+                onClick={() => {
+                  setProfileAnchor(null);
+                  navigate(currentUser?.role === "moderator" ? "/moderator" : "/admin");
+                }}
+                sx={{
+                  fontSize: 14,
+                  gap: 1.5,
+                  "&:hover": {
+                    bgcolor:
+                      currentUser?.role === "moderator"
+                        ? "rgba(56,189,248,0.12)"
+                        : "rgba(251,146,60,0.1)"
+                  }
+                }}
+              >
+                <MSym
+                  name="admin_panel_settings"
+                  sx={{
+                    fontSize: 18,
+                    color: currentUser?.role === "moderator" ? "#38bdf8" : "#fb923c"
+                  }}
+                />
+                {currentUser?.role === "moderator" ? "Moderation Panel" : "Admin Panel"}
+              </MenuItem>
+            )}
             <Divider sx={{ borderColor: "#27272a" }} />
             <MenuItem
               onClick={() => {
