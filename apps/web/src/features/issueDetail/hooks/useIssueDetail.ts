@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchIssue, claimIssue, abortIssue, notifyIssue } from "../api/issueDetailApi";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchIssue, refreshIssue, claimIssue, abortIssue, notifyIssue } from "../api/issueDetailApi";
 import { detectDifficulty, statusPill, difficultyPill } from "../utils";
 import type { IssueDto, CurrentUser, SetupInstruction } from "../types";
 
@@ -19,47 +19,55 @@ export function useIssueDetail(
   const [aborting, setAborting] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
 
-  const loadIssue = async () => {
+  const loadIssueInternal = useCallback(async (background: boolean) => {
     if (!id) return;
-    setLoadingIssue(true);
-    setError(null);
+    if (!background) {
+      setLoadingIssue(true);
+      setError(null);
+    }
+
     try {
       const data = await fetchIssue(id);
       setIssue(data);
+      if (!background) {
+        setError(null);
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.message || "Failed to load issue.";
-      setError(msg);
-      setIssue(null);
+      if (!background) {
+        setError(msg);
+        setIssue(null);
+      }
     } finally {
-      setLoadingIssue(false);
+      if (!background) {
+        setLoadingIssue(false);
+      }
     }
-  };
+  }, [id]);
+
+  const loadIssue = useCallback(async () => {
+    await loadIssueInternal(false);
+  }, [loadIssueInternal]);
+
+  const loadIssueInBackground = useCallback(async () => {
+    await loadIssueInternal(true);
+  }, [loadIssueInternal]);
 
   const refreshStatusOnly = async () => {
     if (!id) return;
     setRefreshingStatus(true);
     try {
-      const data = await fetchIssue(id);
-      setIssue((prev) => {
-        if (!prev) return data;
-        return {
-          ...prev,
-          status: data.status,
-          claimedAt: data.claimedAt,
-          claimedByLogin: data.claimedByLogin,
-          claimedByUserId: data.claimedByUserId,
-          contributionTimeline: data.contributionTimeline,
-          updates: data.updates,
-          notifyWatchers: data.notifyWatchers,
-          expectedOutcome: data.expectedOutcome,
-          requiredSkills: data.requiredSkills,
-          autoSetupCommands: data.autoSetupCommands,
-          projectSetupCommands: data.projectSetupCommands
-        };
-      });
-      showToast("Status refreshed.", "info");
-    } catch {
-      showToast("Failed to refresh status.", "error");
+      const data = await refreshIssue(id);
+      setIssue(data.issue);
+      showToast(data.message || "Status refreshed.", "info");
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "Failed to refresh status.";
+      const nextAllowedInSec = err?.response?.data?.nextAllowedInSec;
+      if (typeof nextAllowedInSec === "number" && nextAllowedInSec > 0) {
+        showToast(`${msg} Try again in ${nextAllowedInSec}s.`, "info");
+      } else {
+        showToast(msg, "error");
+      }
     } finally {
       setRefreshingStatus(false);
     }
@@ -109,12 +117,27 @@ export function useIssueDetail(
   };
 
   useEffect(() => {
-    loadIssue();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    void loadIssue();
+  }, [loadIssue]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const pollId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void loadIssueInBackground();
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(pollId);
+    };
+  }, [id, loadIssueInBackground]);
 
   const isClaimedByMe =
-    !!issue && !!currentUser && issue.status === "claimed" && issue.claimedByUserId === currentUser.id;
+    !!issue &&
+    !!currentUser &&
+    (issue.status === "claimed" || issue.status === "closed") &&
+    issue.claimedByUserId === currentUser.id;
 
   const isClaimedByOther =
     !!issue &&
@@ -129,7 +152,6 @@ export function useIssueDetail(
   const statusP = issue ? statusPill(issue) : null;
   const diffP = difficultyPill(uiDifficulty);
 
-  const skills = (issue?.requiredSkills?.length ? issue.requiredSkills : ["Git", "Debugging", "Testing"]).slice(0, 6);
   const outcomes = issue?.expectedOutcome?.length ? issue.expectedOutcome : ["Open a PR with clear verification steps."];
 
   const projectSetup: SetupInstruction[] = (issue?.projectSetupCommands || []).length
@@ -150,7 +172,6 @@ export function useIssueDetail(
     isWatching,
     statusP,
     diffP,
-    skills,
     outcomes,
     projectSetup,
     loadIssue,

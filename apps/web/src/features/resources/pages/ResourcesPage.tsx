@@ -3,10 +3,7 @@ import {
   Box,
   Button,
   CircularProgress,
-  Divider,
   InputBase,
-  Menu,
-  MenuItem,
   Paper,
   Stack,
   Typography
@@ -34,9 +31,12 @@ function ResourcesSidebarExtra({
   setFilters: React.Dispatch<React.SetStateAction<ResourceFilterState>>;
 }) {
   const categoryLinks: Array<{ label: string; value: ResourceCategory | "All" }> = [
-    { label: "Git & Workflow", value: "Git" },
-    { label: "Tech Stacks", value: "General" },
-    { label: "Documentation", value: "Docs" }
+    { label: "All Categories", value: "All" },
+    { label: "Git Basics", value: "Git Basics" },
+    { label: "Pull Requests", value: "Pull Requests" },
+    { label: "Programming Docs", value: "Programming Docs" },
+    { label: "CLI Mastery", value: "CLI Mastery" },
+    { label: "Bug Fixing", value: "Bug Fixing" }
   ];
 
   return (
@@ -81,25 +81,16 @@ export default function ResourcesPage() {
   const [filters, setFilters] = useState<ResourceFilterState>(DEFAULT_FILTERS);
   const { loading, error, featured, items } = useResources(filters);
 
-  const [categoryAnchor, setCategoryAnchor] = useState<null | HTMLElement>(null);
-  const [difficultyAnchor, setDifficultyAnchor] = useState<null | HTMLElement>(null);
-
-  const topics = [
-    { icon: "account_tree", title: "Git Basics" },
-    { icon: "fork_right", title: "Pull Requests" },
-    { icon: "web", title: "React Guide" },
-    { icon: "terminal", title: "CLI Mastery" },
-    { icon: "bug_report", title: "Bug Fixing" },
-    { icon: "edit_document", title: "Write Docs" }
+  const topics: Array<{ icon: string; title: string; category: ResourceCategory | "All" }> = [
+    { icon: "apps", title: "All Topics", category: "All" },
+    { icon: "account_tree", title: "Git Basics", category: "Git Basics" },
+    { icon: "fork_right", title: "Pull Requests", category: "Pull Requests" },
+    { icon: "web", title: "Programming Docs", category: "Programming Docs" },
+    { icon: "terminal", title: "CLI Mastery", category: "CLI Mastery" },
+    { icon: "bug_report", title: "Bug Fixing", category: "Bug Fixing" }
   ];
 
   const workflowSteps = ["Issue", "Fork", "Branch", "Code", "Commit", "PR", "Review", "Merge"];
-
-  const categoryOptions: Array<ResourceCategory | "All"> = [
-    "All", "Git", "GitHub", "Project Setup", "Debugging", "Testing", "CI/CD", "Docs", "General"
-  ];
-
-  const difficultyOptions: Array<ResourceDifficulty | "All"> = ["All", "beginner", "intermediate", "advanced"];
 
   const curatedGuides = useMemo(() => {
     const merged: ResourceItem[] = [];
@@ -114,12 +105,6 @@ export default function ResourcesPage() {
 
     return merged;
   }, [featured, items]);
-
-  const categoryLabel = filters.category === "All" ? "Category" : filters.category;
-  const difficultyLabel =
-    filters.difficulty === "All"
-      ? "Difficulty"
-      : `${filters.difficulty.charAt(0).toUpperCase()}${filters.difficulty.slice(1)}`;
 
   const difficultyMeta = (difficulty: ResourceDifficulty) => {
     if (difficulty === "beginner") {
@@ -165,39 +150,52 @@ export default function ResourcesPage() {
               sx={{ color: "#fff", fontSize: 14, width: "100%" }}
             />
           </Paper>
-
-          <Stack direction="row" spacing={1}>
-            <Button
-              onClick={(e) => setCategoryAnchor(e.currentTarget)}
-              sx={{ height: 46, borderRadius: "16px", textTransform: "none", px: 2, color: "#fff", border: "1px solid #27272a", bgcolor: "#0b0f17", gap: 0.75 }}
-              startIcon={<MSym name="category" sx={{ fontSize: 18 }} />}
-              endIcon={<MSym name="keyboard_arrow_down" sx={{ fontSize: 16 }} />}
-            >
-              {categoryLabel}
-            </Button>
-            <Button
-              onClick={(e) => setDifficultyAnchor(e.currentTarget)}
-              sx={{ height: 46, borderRadius: "16px", textTransform: "none", px: 2, color: "#fff", border: "1px solid #27272a", bgcolor: "#0b0f17", gap: 0.75 }}
-              startIcon={<MSym name="bolt" sx={{ fontSize: 18 }} />}
-              endIcon={<MSym name="keyboard_arrow_down" sx={{ fontSize: 16 }} />}
-            >
-              {difficultyLabel}
-            </Button>
-          </Stack>
         </Stack>
 
         <Typography sx={{ color: "#a1a1aa", fontWeight: 600, fontSize: 12, letterSpacing: 2.4, textTransform: "uppercase", mt: 4, mb: 2 }}>
           Popular Topics
         </Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0,1fr))", md: "repeat(6, minmax(0,1fr))" }, gap: 2 }}>
-          {topics.map((topic) => (
-            <Paper key={topic.title} elevation={0} sx={{ bgcolor: "#0b0f17", border: "1px solid #27272a", borderRadius: "20px", py: 2.5, px: 1.5, textAlign: "center" }}>
-              <Box sx={{ width: 48, height: 48, borderRadius: 999, bgcolor: "rgba(25,230,107,0.10)", display: "grid", placeItems: "center", mx: "auto" }}>
-                <MSym name={topic.icon} sx={{ color: "#19e66b", fontSize: 20 }} />
-              </Box>
-              <Typography sx={{ mt: 1.5, color: "#fff", fontSize: 14, fontWeight: 600 }}>{topic.title}</Typography>
-            </Paper>
-          ))}
+          {topics.map((topic) => {
+            const active = filters.category === topic.category;
+
+            return (
+              <Paper
+                key={topic.title}
+                elevation={0}
+                onClick={() => setFilters((prev) => ({ ...prev, category: topic.category }))}
+                sx={{
+                  bgcolor: active ? "rgba(25,230,107,0.08)" : "#0b0f17",
+                  border: active ? "1px solid rgba(25,230,107,0.30)" : "1px solid #27272a",
+                  borderRadius: "20px",
+                  py: 2.5,
+                  px: 1.5,
+                  textAlign: "center",
+                  cursor: "pointer",
+                  transition: "transform 0.2s, border-color 0.2s",
+                  "&:hover": {
+                    transform: "translateY(-1px)",
+                    borderColor: "rgba(25,230,107,0.25)"
+                  }
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 999,
+                    bgcolor: active ? "rgba(25,230,107,0.16)" : "rgba(25,230,107,0.10)",
+                    display: "grid",
+                    placeItems: "center",
+                    mx: "auto"
+                  }}
+                >
+                  <MSym name={topic.icon} sx={{ color: "#19e66b", fontSize: 20 }} />
+                </Box>
+                <Typography sx={{ mt: 1.5, color: "#fff", fontSize: 14, fontWeight: 600 }}>{topic.title}</Typography>
+              </Paper>
+            );
+          })}
         </Box>
 
         <Typography sx={{ color: "#a1a1aa", fontWeight: 600, fontSize: 12, letterSpacing: 2.4, textTransform: "uppercase", mt: 4, mb: 2 }}>
@@ -253,7 +251,91 @@ export default function ResourcesPage() {
           </Paper>
         )}
 
-        {!loading && !error && (
+        {!loading && !error && curatedGuides.length === 0 && (
+          <Paper
+            elevation={0}
+            sx={{
+              bgcolor: "#0b0f17",
+              border: "1px solid #27272a",
+              borderRadius: "20px",
+              px: { xs: 2, md: 8 },
+              py: 5,
+              textAlign: "center",
+              position: "relative",
+              overflow: "hidden"
+            }}
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                inset: 0,
+                opacity: 0.5,
+                background: "linear-gradient(164deg, rgba(96,165,250,0.08) 0%, rgba(96,165,250,0) 100%)"
+              }}
+            />
+            <Box sx={{ position: "relative", zIndex: 1 }}>
+              <Typography sx={{ fontSize: 24, fontWeight: 700, lineHeight: "32px", color: "#fff" }}>
+                No Learning Resources Found
+              </Typography>
+              <Typography sx={{ mt: 1.25, color: "#a1a1aa", fontSize: 14, lineHeight: "20px" }}>
+                {filters.category === "All"
+                  ? "There are no learning resources available right now."
+                  : `No resources are available in ${filters.category} right now.`}
+              </Typography>
+
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center" sx={{ mt: 3 }}>
+                <Button
+                  onClick={() => navigate("/good-first-issues")}
+                  endIcon={<MSym name="arrow_forward" sx={{ fontSize: 12 }} />}
+                  sx={{
+                    height: 48,
+                    borderRadius: "14px",
+                    px: 3,
+                    textTransform: "none",
+                    fontWeight: 700,
+                    bgcolor: "#19e66b",
+                    color: "#000",
+                    "&:hover": { bgcolor: "#22c55e" }
+                  }}
+                >
+                  Explore Good First Issues
+                </Button>
+                <Button
+                  onClick={() => navigate("/feed")}
+                  sx={{
+                    height: 48,
+                    borderRadius: "14px",
+                    px: 3,
+                    textTransform: "none",
+                    fontWeight: 700,
+                    color: "#fff",
+                    border: "1px solid #27272a",
+                    bgcolor: "transparent"
+                  }}
+                >
+                  Go To Issue Feed
+                </Button>
+                <Button
+                  onClick={() => setFilters(DEFAULT_FILTERS)}
+                  sx={{
+                    height: 48,
+                    borderRadius: "14px",
+                    px: 3,
+                    textTransform: "none",
+                    fontWeight: 700,
+                    color: "#a1a1aa",
+                    border: "1px solid #27272a",
+                    bgcolor: "transparent"
+                  }}
+                >
+                  Show All Categories
+                </Button>
+              </Stack>
+            </Box>
+          </Paper>
+        )}
+
+        {!loading && !error && curatedGuides.length > 0 && (
           <Stack spacing={2}>
             {curatedGuides.map((guide) => {
               const meta = difficultyMeta(guide.difficulty);
@@ -317,97 +399,10 @@ export default function ResourcesPage() {
           </Stack>
         )}
 
-        <Paper elevation={0} sx={{ mt: 5, bgcolor: "#0b0f17", border: "1px solid #27272a", borderRadius: "20px", px: { xs: 2, md: 12 }, py: 5, position: "relative", overflow: "hidden" }}>
-          <Box sx={{ position: "absolute", inset: 0, opacity: 0.5, background: "linear-gradient(164deg, rgba(25,230,107,0.05) 0%, rgba(25,230,107,0) 100%)" }} />
-          <Box sx={{ position: "relative", zIndex: 1 }}>
-            <Typography sx={{ textAlign: "center", fontSize: 24, fontWeight: 700, lineHeight: "32px" }}>
-              Ready to Start Contributing?
-            </Typography>
-            <Typography sx={{ mt: 1.25, textAlign: "center", color: "#a1a1aa", fontSize: 14, lineHeight: "20px" }}>
-              Put your skills to the test with real-world issues curated for beginners and first-time contributors.
-            </Typography>
-
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center" sx={{ mt: 3 }}>
-              <Button
-                onClick={() => navigate("/feed")}
-                endIcon={<MSym name="arrow_forward" sx={{ fontSize: 12 }} />}
-                sx={{
-                  height: 52,
-                  borderRadius: "16px",
-                  px: 4,
-                  textTransform: "none",
-                  fontWeight: 700,
-                  bgcolor: "#19e66b",
-                  color: "#000",
-                  boxShadow: "0 0 20px rgba(25,230,107,0.15)",
-                  "&:hover": { bgcolor: "#22c55e" }
-                }}
-              >
-                Browse Beginner Issues
-              </Button>
-              <Button
-                onClick={() => navigate("/pr-tracking")}
-                sx={{
-                  height: 52,
-                  borderRadius: "16px",
-                  px: 4,
-                  textTransform: "none",
-                  fontWeight: 700,
-                  color: "#fff",
-                  border: "1px solid #27272a",
-                  bgcolor: "transparent"
-                }}
-              >
-                Track My PRs
-              </Button>
-            </Stack>
-          </Box>
-        </Paper>
-
         <Typography sx={{ mt: 4, color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
           © 2023 OpenCollab Inc. · Terms · Privacy
         </Typography>
       </Box>
-
-      <Menu
-        anchorEl={categoryAnchor}
-        open={Boolean(categoryAnchor)}
-        onClose={() => setCategoryAnchor(null)}
-        PaperProps={{ sx: { mt: 1, bgcolor: "#0b0f17", border: "1px solid #27272a", color: "#fff", minWidth: 220 } }}
-      >
-        {categoryOptions.map((option) => (
-          <MenuItem
-            key={option}
-            onClick={() => {
-              setFilters((prev) => ({ ...prev, category: option }));
-              setCategoryAnchor(null);
-            }}
-            selected={filters.category === option}
-          >
-            {option}
-          </MenuItem>
-        ))}
-      </Menu>
-
-      <Menu
-        anchorEl={difficultyAnchor}
-        open={Boolean(difficultyAnchor)}
-        onClose={() => setDifficultyAnchor(null)}
-        PaperProps={{ sx: { mt: 1, bgcolor: "#0b0f17", border: "1px solid #27272a", color: "#fff", minWidth: 220 } }}
-      >
-        {difficultyOptions.map((option) => (
-          <MenuItem
-            key={option}
-            onClick={() => {
-              setFilters((prev) => ({ ...prev, difficulty: option }));
-              setDifficultyAnchor(null);
-            }}
-            selected={filters.difficulty === option}
-          >
-            {option === "All" ? "All" : `${option.charAt(0).toUpperCase()}${option.slice(1)}`}
-          </MenuItem>
-        ))}
-      </Menu>
     </AppLayout>
   );
 }

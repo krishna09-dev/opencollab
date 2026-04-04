@@ -38,7 +38,14 @@ export default function IssueDetailPage() {
 
   const closeToast = () => setToast((p) => ({ ...p, open: false }));
 
-  const { currentUser, loadingUser, unreadCount, loadNotifications } = useCurrentUser();
+  const {
+    currentUser,
+    loadingUser,
+    notifications,
+    unreadCount,
+    loadNotifications,
+    markNotificationsReadAll
+  } = useCurrentUser();
 
   const {
     issue,
@@ -52,7 +59,6 @@ export default function IssueDetailPage() {
     isWatching,
     statusP,
     diffP,
-    skills,
     outcomes,
     projectSetup,
     loadIssue,
@@ -62,7 +68,20 @@ export default function IssueDetailPage() {
     refreshStatusOnly
   } = useIssueDetail(id, currentUser, showToast, loadNotifications);
 
-  const copyToClipboard = (value: string) => navigator.clipboard?.writeText(value).catch(console.error);
+  const copyToClipboard = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast("Copied to clipboard.", "success");
+    } catch {
+      showToast("Failed to copy to clipboard.", "error");
+    }
+  };
+
+  const buildIssueShareUrl = (issueId: string) => {
+    const configuredBaseUrl = String(import.meta.env.VITE_PUBLIC_APP_URL || "").trim();
+    const baseUrl = (configuredBaseUrl || window.location.origin).replace(/\/+$/, "");
+    return `${baseUrl}/issues/${issueId}`;
+  };
 
   const pageLoading = loadingIssue || loadingUser;
 
@@ -83,7 +102,13 @@ export default function IssueDetailPage() {
         }}
       />
 
-      <IssueDetailHeader currentUser={currentUser} unreadCount={unreadCount} />
+      <IssueDetailHeader
+        currentUser={currentUser}
+        unreadCount={unreadCount}
+        notifications={notifications}
+        loadNotifications={loadNotifications}
+        markNotificationsReadAll={markNotificationsReadAll}
+      />
 
       <Container maxWidth={false} sx={{ maxWidth: 1440, py: 4, px: { xs: 2, md: 5, lg: 10 } }}>
         {pageLoading ? (
@@ -112,9 +137,10 @@ export default function IssueDetailPage() {
                 statusP={statusP!}
                 diffP={diffP}
                 copyToClipboard={copyToClipboard}
+                shareUrl={buildIssueShareUrl(issue._id)}
               />
 
-              <IssueBodyCard issue={issue} outcomes={outcomes} skills={skills} />
+              <IssueBodyCard issue={issue} outcomes={outcomes} />
 
               <SetupInstructions
                 issue={issue}
@@ -145,11 +171,15 @@ export default function IssueDetailPage() {
                 handleNotify={handleNotify}
               />
 
-              <PrTrackingCard issueId={issue._id} showToast={showToast} />
+              <PrTrackingCard issueId={issue._id} canSubmit={isClaimedByMe} showToast={showToast} onIssueUpdated={loadIssue} />
 
-              <SuggestedResourcesCard issue={issue} />
+              <SuggestedResourcesCard />
 
-              <IssueActions issue={issue} copyToClipboard={copyToClipboard} />
+              <IssueActions
+                issue={issue}
+                copyToClipboard={copyToClipboard}
+                shareUrl={buildIssueShareUrl(issue._id)}
+              />
             </Box>
           </Stack>
         )}

@@ -4,6 +4,9 @@ export interface ApprovedRepoDocument extends Document {
   fullName: string; // owner/repo
   repoOwner: string;
   repoName: string;
+  description?: string | null;
+  htmlUrl?: string | null;
+  language?: string | null;
 
   isActive: boolean;
 
@@ -19,6 +22,9 @@ const ApprovedRepoSchema = new Schema<ApprovedRepoDocument>(
     fullName: { type: String, required: true, unique: true },
     repoOwner: { type: String, required: true },
     repoName: { type: String, required: true },
+    description: { type: String, default: null },
+    htmlUrl: { type: String, default: null },
+    language: { type: String, default: null },
 
     isActive: { type: Boolean, default: true },
 

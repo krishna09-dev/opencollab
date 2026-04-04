@@ -14,6 +14,7 @@ type BackendResource = {
   url: string;
   description?: string;
 
+  category?: string;
   type: BackendResourceType;
   difficulty: BackendResourceDifficulty;
 
@@ -44,30 +45,38 @@ type BackendResourcesResponse = {
 
 /** ================= CATEGORY MAPPING ================= */
 
-const categoryToTopic: Record<ResourceCategory, string | null> = {
-  Git: "workflow",
-  GitHub: "pr",
-  "Project Setup": "setup",
-  Debugging: "debugging",
-  Testing: "testing",
-  "CI/CD": "ci-cd",
-  Docs: "docs",
-  General: null
+const RESOURCE_CATEGORIES: ResourceCategory[] = [
+  "Git Basics",
+  "Pull Requests",
+  "Programming Docs",
+  "CLI Mastery",
+  "Bug Fixing"
+];
+
+const categoryToLegacyTopics: Record<ResourceCategory, string[]> = {
+  "Git Basics": ["workflow"],
+  "Pull Requests": ["pr"],
+  "Programming Docs": ["setup", "testing", "ci-cd"],
+  "CLI Mastery": ["cli"],
+  "Bug Fixing": ["debugging"]
 };
 
 function inferCategoryFromBackend(r: BackendResource): ResourceCategory {
+  const direct = String(r.category || "").trim() as ResourceCategory;
+  if (RESOURCE_CATEGORIES.includes(direct)) return direct;
+
   const topics = (r.topics ?? []).map((x) => String(x).toLowerCase());
   const tags = (r.tags ?? []).map((x) => String(x).toLowerCase());
   const type = String(r.type).toLowerCase();
 
-  if (topics.includes("testing") || tags.includes("testing") || tags.includes("jest")) return "Testing";
-  if (topics.includes("setup") || tags.includes("setup") || tags.includes("install")) return "Project Setup";
-  if (topics.includes("debugging") || tags.includes("debug") || tags.includes("troubleshooting")) return "Debugging";
-  if (topics.includes("ci-cd") || tags.includes("ci") || tags.includes("cicd") || tags.includes("github-actions")) return "CI/CD";
-  if (topics.includes("docs") || type === "docs") return "Docs";
-  if (topics.includes("pr") || tags.includes("pull-request") || tags.includes("github")) return "GitHub";
-  if (topics.includes("workflow") || tags.includes("git") || tags.includes("commit") || tags.includes("branch")) return "Git";
-  return "General";
+  if (topics.includes("pr") || tags.includes("pull-request") || tags.includes("github") || tags.includes("review")) return "Pull Requests";
+  if (topics.includes("workflow") || tags.includes("git") || tags.includes("commit") || tags.includes("branch") || tags.includes("merge")) return "Git Basics";
+  if (topics.includes("debugging") || tags.includes("bug") || tags.includes("debug") || tags.includes("fix") || tags.includes("troubleshooting")) return "Bug Fixing";
+  if (tags.includes("cli") || tags.includes("terminal") || tags.includes("shell") || tags.includes("command-line")) return "CLI Mastery";
+  if (topics.includes("docs") || tags.includes("docs") || tags.includes("documentation") || tags.includes("readme") || tags.includes("contributing-guide")) return "Programming Docs";
+  if (topics.includes("setup") || topics.includes("testing") || topics.includes("ci-cd") || tags.includes("tutorial") || tags.includes("guide") || type === "docs") return "Programming Docs";
+
+  return "Programming Docs";
 }
 
 function mapBackendTypeToUiType(t: BackendResourceType): ResourceType {
@@ -108,16 +117,9 @@ function mapBackendToResourceItem(r: BackendResource): ResourceItem {
     language: r.language ?? null,
     isFeatured: !!r.isFeatured,
 
-    // ✅ change: set official based on real backend source
     isOfficial: source === "official",
-
-    // ✅ keep tags
     tags: r.tags ?? [],
-
-    // ✅ OPTIONAL: if you want to display this later on card
-    // @ts-ignore (only if your ResourceItem doesn’t have these yet)
     source,
-    // @ts-ignore
     status
   };
 }
@@ -143,8 +145,7 @@ function buildParams(filters: ResourceFilterState) {
   }
 
   if (filters.category !== "All") {
-    const topic = categoryToTopic[filters.category];
-    if (topic) params.set("topic", topic);
+    params.set("category", filters.category);
   }
 
   params.set("limit", "80");
@@ -199,8 +200,7 @@ export type SuggestResourceInput = {
 };
 
 export async function suggestResource(input: SuggestResourceInput): Promise<{ message: string; id: string }> {
-  const topic = categoryToTopic[input.category];
-  const topics = topic ? [topic] : [];
+  const topics = categoryToLegacyTopics[input.category] ?? [];
 
   // Map UI types "guide"/"cheatsheet" to backend "tool"
   let backendType: string = input.type;
@@ -214,6 +214,7 @@ export async function suggestResource(input: SuggestResourceInput): Promise<{ me
       title: input.title,
       url: input.url,
       description: input.description,
+      category: input.category,
       type: backendType,
       difficulty: input.difficulty,
       tags: input.tags,

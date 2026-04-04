@@ -2,14 +2,11 @@ export type ResourceDifficulty = "beginner" | "intermediate" | "advanced";
 export type ResourceType = "docs" | "video" | "guide" | "cheatsheet" | "article";
 
 export type ResourceCategory =
-  | "Git"
-  | "GitHub"
-  | "Project Setup"
-  | "Debugging"
-  | "Testing"
-  | "CI/CD"
-  | "Docs"
-  | "General";
+  | "Git Basics"
+  | "Pull Requests"
+  | "Programming Docs"
+  | "CLI Mastery"
+  | "Bug Fixing";
 
 /** ✅ NEW */
 export type ResourceSource = "official" | "community";

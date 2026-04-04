@@ -11,6 +11,13 @@ export async function fetchIssueStats() {
   return res.data;
 }
 
+export async function fetchAvailableIssueLanguages() {
+  const res = await api.get<{ languages: string[] }>("/api/issues/languages", {
+    headers: authHeaders()
+  });
+  return res.data.languages || [];
+}
+
 export async function fetchFeed(filters: FeedFilters = {}) {
   const params = new URLSearchParams();
   if (filters.page) params.set("page", String(filters.page));
@@ -39,6 +46,7 @@ export interface RecommendationItem {
   summary?: string;
   body?: string;
   claimed_by?: string;
+  issue_status?: "open" | "claimed" | "closed";
 }
 
 export interface RecommendationsResponse {

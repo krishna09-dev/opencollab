@@ -101,12 +101,20 @@ export type PrTimelineEntry =
       id: string;
       type: "restriction";
       body: string;
+    }
+  | {
+      id: string;
+      type: "comment";
+      actor: string;
+      body: string;
+      atLabel: string;
+      isReview?: boolean;
     };
 
 export type PrDetailResponse = {
   id: string;
   title: string;
-  number: number;
+  number: number | null;
   owner: string;
   repo: string;
   status: "OPEN" | "IN_REVIEW" | "CHANGES_REQUESTED" | "MERGED";
@@ -118,12 +126,12 @@ export type PrDetailResponse = {
     commentedAtLabel: string;
     intro: string;
     changes: string[];
-    note?: string;
-    linkedIssue: {
+    note?: string | null;
+    linkedIssue?: {
       number: number;
       title: string;
       openedBy: string;
-    };
+    } | null;
   };
   timeline: PrTimelineEntry[];
   sidebar: {
@@ -131,11 +139,13 @@ export type PrDetailResponse = {
     checks: Array<{ id: string; name: string; status: "success" | "running" | "failed"; durationLabel: string; progress: number }>;
     filesChangedTotal: number;
     filesChanged: Array<{ path: string; additions: number; deletions: number }>;
-    linkedIssue: {
+    linkedIssue?: {
       number: number;
       title: string;
       openedBy: string;
-    };
+    } | null;
     systemStatusLabel: string;
+    additions?: number;
+    deletions?: number;
   };
 };

@@ -3,12 +3,58 @@ import { Router, Response } from "express";
 import { AuthRequest, authRequired } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { listResourcesSchema, suggestResourceSchema } from "../validators/resources.validator";
-import { Resource } from "../models/Resource";
+import { Resource, RESOURCE_CATEGORIES, type ResourceCategory } from "../models/Resource";
 
 const router = Router();
 
 type ResourceSource = "official" | "community";
 type ResourceStatus = "approved" | "pending" | "rejected";
+
+function legacyCategoryFilter(category: ResourceCategory): Record<string, unknown> {
+  if (category === "Git Basics") {
+    return {
+      $or: [
+        { topics: { $in: ["workflow"] } },
+        { tags: { $in: ["git", "branch", "commit", "merge"] } }
+      ]
+    };
+  }
+
+  if (category === "Pull Requests") {
+    return {
+      $or: [
+        { topics: { $in: ["pr"] } },
+        { tags: { $in: ["pull-request", "github", "review"] } }
+      ]
+    };
+  }
+
+  if (category === "CLI Mastery") {
+    return {
+      $or: [
+        { topics: { $in: ["cli"] } },
+        { tags: { $in: ["cli", "terminal", "shell", "command-line"] } }
+      ]
+    };
+  }
+
+  if (category === "Bug Fixing") {
+    return {
+      $or: [
+        { topics: { $in: ["debugging"] } },
+        { tags: { $in: ["bug", "debug", "fix", "troubleshooting"] } }
+      ]
+    };
+  }
+
+  return {
+    $or: [
+      { topics: { $in: ["setup", "testing", "ci-cd"] } },
+      { tags: { $in: ["setup", "testing", "ci", "cicd", "tutorial", "guide"] } },
+      { type: "docs" }
+    ]
+  };
+}
 
 /**
  * GET /api/resources
@@ -21,7 +67,7 @@ router.get(
   validate(listResourcesSchema),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { q, type, difficulty, topic, tag, featured, source, limit: limitStr, page: pageStr } = req.validated!.query;
+      const { q, type, category, difficulty, topic, tag, featured, source, limit: limitStr, page: pageStr } = req.validated!.query;
 
       const limit = Math.min(Number(limitStr ?? 40) || 40, 100);
       const page = Math.max(Number(pageStr ?? 1) || 1, 1);
@@ -30,6 +76,9 @@ router.get(
       const filter: Record<string, unknown> = { status: "approved" as ResourceStatus };
 
       if (type) filter.type = type;
+      if (category) {
+        filter.$or = [{ category }, legacyCategoryFilter(category as ResourceCategory)];
+      }
       if (difficulty) filter.difficulty = difficulty;
 
       if (source === "official" || source === "community") filter.source = source;
@@ -84,7 +133,7 @@ router.post(
   validate(suggestResourceSchema),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { title, url, description, type, difficulty, tags, topics, language } = req.validated!.body;
+      const { title, url, description, category, type, difficulty, tags, topics, language } = req.validated!.body;
 
       const exists = await Resource.findOne({ url });
       if (exists) {
@@ -95,6 +144,7 @@ router.post(
         title,
         url,
         description,
+        category,
         type,
         difficulty,
         tags,
@@ -126,11 +176,19 @@ router.post(
 router.post("/migrate", authRequired, async (_req: AuthRequest, res: Response) => {
   try {
     const result = await Resource.updateMany(
-      { $or: [{ source: { $exists: false } }, { status: { $exists: false } }] },
+      {
+        $or: [
+          { source: { $exists: false } },
+          { status: { $exists: false } },
+          { category: { $exists: false } },
+          { category: { $nin: RESOURCE_CATEGORIES as unknown as string[] } }
+        ]
+      },
       {
         $set: {
           source: "official",
-          status: "approved"
+          status: "approved",
+          category: "Programming Docs"
         }
       }
     );

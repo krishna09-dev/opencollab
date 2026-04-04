@@ -1,24 +1,88 @@
+import axios from "axios";
 import { Issue } from "../models/Issue";
+import { ApprovedRepo } from "../models/ApprovedRepo";
 import { IngestionRun } from "../models/IngestionRun";
-import { fetchBeginnerOpenIssuesForRepo } from "./githubIssues.service";
+import { fetchOpenIssuesForRepo } from "./githubIssues.service";
 import { dedupeByIssueKey } from "../utils/dedupe";
 import { markRepoError, markRepoRun, markRepoSuccess } from "./repoSyncState.service";
+
+async function fetchRepoLanguage(
+  owner: string,
+  repo: string,
+  githubToken?: string
+): Promise<string | null> {
+  const token = githubToken || process.env.GITHUB_SYSTEM_TOKEN;
+  if (!token) return null;
+
+  try {
+    const res = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json"
+      }
+    });
+    return res.data?.language || null;
+  } catch (err) {
+    console.error(`Failed to fetch repo language for ${owner}/${repo}:`, err);
+    return null;
+  }
+}
 
 export async function ingestSingleRepo(params: {
   fullName: string;
   repoOwner: string;
   repoName: string;
   lastSyncedAt?: Date | null;
+  repoLanguage?: string | null;
+  githubToken?: string;
 }) {
   await markRepoRun(params.fullName);
 
   const sinceISO = params.lastSyncedAt ? params.lastSyncedAt.toISOString() : undefined;
 
   try {
-    const { issues, fetchedCount } = await fetchBeginnerOpenIssuesForRepo({
+    // Fetch repo language when it is missing in repo metadata.
+    let repoLanguage = typeof params.repoLanguage === "string"
+      ? params.repoLanguage.trim()
+      : params.repoLanguage;
+    if (!repoLanguage) {
+      repoLanguage = await fetchRepoLanguage(
+        params.repoOwner,
+        params.repoName,
+        params.githubToken
+      );
+    }
+
+    // Update ApprovedRepo so future syncs can reuse the language.
+    if (repoLanguage && repoLanguage !== params.repoLanguage) {
+      await ApprovedRepo.updateOne(
+        { fullName: params.fullName },
+        { $set: { language: repoLanguage } }
+      );
+    }
+
+    // Backfill existing issues so language filters work even on incremental syncs.
+    if (repoLanguage) {
+      await Issue.updateMany(
+        {
+          repoOwner: params.repoOwner,
+          repoName: params.repoName,
+          $or: [
+            { repoLanguage: null },
+            { repoLanguage: "" },
+            { repoLanguage: { $exists: false } }
+          ]
+        },
+        { $set: { repoLanguage } }
+      );
+    }
+
+    const { issues, fetchedCount } = await fetchOpenIssuesForRepo({
       owner: params.repoOwner,
       repo: params.repoName,
-      sinceISO
+      sinceISO,
+      repoLanguage,
+      githubToken: params.githubToken
     });
 
     const unique = dedupeByIssueKey(issues);
@@ -33,12 +97,13 @@ export async function ingestSingleRepo(params: {
             title: dto.title,
             body: dto.body,
             labels: dto.labels,
+            repoLanguage: dto.repoLanguage,
             githubUrl: dto.githubUrl,
             githubCreatedAt: dto.githubCreatedAt,
             githubUpdatedAt: dto.githubUpdatedAt,
             status: "open",
             openedAt: dto.openedAt,
-            beginnerFriendly: true,
+            beginnerFriendly: dto.beginnerFriendly,
             recentlyUpdated: true,
             lastSyncedAt: new Date()
           },
@@ -123,7 +188,8 @@ export async function ingestAllApprovedRepos(
       fullName: r.fullName,
       repoOwner: r.repoOwner,
       repoName: r.repoName,
-      lastSyncedAt: r.lastSyncedAt
+      lastSyncedAt: r.lastSyncedAt,
+      repoLanguage: r.language
     });
   });
 

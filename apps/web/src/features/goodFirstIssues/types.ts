@@ -5,6 +5,7 @@ export interface GoodFirstIssue {
   githubNumber: number;
   repoOwner: string;
   repoName: string;
+  repoLanguage?: string | null;
   title: string;
   body: string;
   summary: string;

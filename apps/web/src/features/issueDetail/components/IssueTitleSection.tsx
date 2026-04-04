@@ -10,9 +10,10 @@ type Props = {
   statusP: PillStyle;
   diffP: PillStyle;
   copyToClipboard: (value: string) => void;
+  shareUrl: string;
 };
 
-export default function IssueTitleSection({ issue, statusP, diffP, copyToClipboard }: Props) {
+export default function IssueTitleSection({ issue, statusP, diffP, copyToClipboard, shareUrl }: Props) {
   return (
     <>
       {/* Breadcrumb */}
@@ -29,7 +30,7 @@ export default function IssueTitleSection({ issue, statusP, diffP, copyToClipboa
           </Typography>
 
           <IconButton
-            onClick={() => copyToClipboard(window.location.href)}
+            onClick={() => copyToClipboard(shareUrl)}
             sx={{
               width: 48,
               height: 48,
@@ -56,6 +57,13 @@ export default function IssueTitleSection({ issue, statusP, diffP, copyToClipboa
           <MSym name={diffP.icon} sx={{ fontSize: 10, color: diffP.fg }} />
           {diffP.text}
         </Box>
+
+        {issue.repoLanguage && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 0.75, py: 0.5, borderRadius: "6px", bgcolor: "#11111a", border: "1px solid #2c312a", color: "#d1d5db", fontSize: 8, fontWeight: 600 }}>
+            <Box sx={{ width: 6, height: 6, borderRadius: 999, bgcolor: labelColorDot(issue.repoLanguage) }} />
+            {issue.repoLanguage}
+          </Box>
+        )}
 
         {(issue.labels || []).slice(0, 3).map((l) => (
           <Box key={l} sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 0.75, py: 0.5, borderRadius: "6px", bgcolor: "#11111a", border: "1px solid #2c312a", color: "#d1d5db", fontSize: 8, fontWeight: 600 }}>

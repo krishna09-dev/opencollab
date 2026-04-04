@@ -99,12 +99,16 @@ router.post(
       });
     } catch (err: any) {
       console.error("POST /api/pr-tracking/add error:", err);
-      if (err.message?.includes("Invalid PR URL") || err.message?.includes("PR not found")) {
-        return res.status(400).json({ message: err.message });
+      const statusCode = err.statusCode
+        || (err.message?.includes("Invalid PR URL") ? 400 : undefined)
+        || (err.message?.includes("Missing GitHub token") ? 401 : undefined)
+        || (err.message?.includes("PR not found") ? 404 : undefined)
+        || 500;
+
+      if (statusCode >= 400 && statusCode < 500) {
+        return res.status(statusCode).json({ message: err.message || "Failed to add PR" });
       }
-      if (err.message?.includes("Missing GitHub token")) {
-        return res.status(401).json({ message: err.message });
-      }
+
       return res.status(500).json({ message: "Failed to add PR" });
     }
   }
@@ -199,8 +203,12 @@ router.post(
       });
 
       return res.status(201).json({ message: "Tracking ensured", item: doc });
-    } catch (err) {
+    } catch (err: any) {
       console.error("POST /api/pr-tracking/ensure error:", err);
+      const statusCode = err.statusCode || 500;
+      if (statusCode >= 400 && statusCode < 500) {
+        return res.status(statusCode).json({ message: err.message || "Failed to ensure tracking" });
+      }
       return res.status(500).json({ message: "Failed to ensure tracking" });
     }
   }

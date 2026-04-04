@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchMe, fetchIssueStats, fetchFeed, fetchRecommendations } from "../api/homeApi";
+import { fetchMe, fetchIssueStats, fetchFeed, fetchRecommendations, fetchAvailableIssueLanguages } from "../api/homeApi";
 import { fetchPrList, manualRefreshAll } from "../../prTracking/api/prTrackingApi";
 import type { RecommendationItem } from "../api/homeApi";
 import type { IssueStatsResponse, IssueRow, FeedPagination, FeedFilters } from "../types";
@@ -18,10 +18,12 @@ export function useHomeFeed() {
   const [issuesError, setIssuesError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FeedFilters>({ page: 1, limit: 10 });
+  const [languageOptions, setLanguageOptions] = useState<string[]>([]);
 
   // ML Recommendations
   const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [useRecommendations, setUseRecommendations] = useState(false);
 
   // PR Tracking
@@ -36,11 +38,17 @@ export function useHomeFeed() {
 
   const loadRecommendations = useCallback(async () => {
     setRecommendationsLoading(true);
+    setRecommendationError(null);
     try {
       const data = await fetchRecommendations(5);
       setRecommendations(data.recommendations || []);
-    } catch (err) {
+      if (data.error) {
+        setRecommendationError(data.error);
+      }
+    } catch (err: any) {
       console.error("Failed to load recommendations:", err);
+      const msg = err?.response?.data?.message || err?.response?.data?.error || "Failed to load recommendations.";
+      setRecommendationError(msg);
       setRecommendations([]);
     } finally {
       setRecommendationsLoading(false);
@@ -92,6 +100,16 @@ export function useHomeFeed() {
     }
   }, [filters]);
 
+  const loadLanguageOptions = useCallback(async () => {
+    try {
+      const langs = await fetchAvailableIssueLanguages();
+      setLanguageOptions(langs);
+    } catch (err) {
+      console.error("Failed to load language options:", err);
+      setLanguageOptions([]);
+    }
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem("oc_token");
     if (!token) {
@@ -118,7 +136,8 @@ export function useHomeFeed() {
         await Promise.all([
           loadIssues(),
           loadRecommendations(),
-          loadPrs()
+          loadPrs(),
+          loadLanguageOptions()
         ]);
       } catch (err) {
         console.error(err);
@@ -151,9 +170,13 @@ export function useHomeFeed() {
   }, [updateFilters]);
 
   const toggleRecommendations = useCallback(() => {
-    setUseRecommendations((prev) => !prev);
+    const next = !useRecommendations;
+    setUseRecommendations(next);
     setUsePrFeed(false);
-  }, []);
+    if (next) {
+      void loadRecommendations();
+    }
+  }, [useRecommendations, loadRecommendations]);
 
   const togglePrFeed = useCallback(() => {
     setUsePrFeed(true);
@@ -178,12 +201,14 @@ export function useHomeFeed() {
     issuesLoading,
     issuesError,
     filters,
+    languageOptions,
     updateFilters,
     goToPage,
     loadIssues: () => loadIssues(filters),
     // Recommendations
     recommendations,
     recommendationsLoading,
+    recommendationError,
     useRecommendations,
     toggleRecommendations,
     loadRecommendations,

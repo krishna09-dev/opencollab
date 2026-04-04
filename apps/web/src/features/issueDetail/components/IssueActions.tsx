@@ -5,9 +5,10 @@ import type { IssueDto } from "../types";
 type Props = {
   issue: IssueDto;
   copyToClipboard: (value: string) => void;
+  shareUrl: string;
 };
 
-export default function IssueActions({ issue, copyToClipboard }: Props) {
+export default function IssueActions({ issue, copyToClipboard, shareUrl }: Props) {
   return (
     <Stack spacing={1.25} sx={{ mb: 2.5 }}>
       {/* Open in GitHub */}
@@ -43,7 +44,7 @@ export default function IssueActions({ issue, copyToClipboard }: Props) {
       {/* Share link */}
       <Button
         fullWidth
-        onClick={() => copyToClipboard(window.location.href)}
+        onClick={() => copyToClipboard(shareUrl)}
         startIcon={<MSym name="share" sx={{ fontSize: 20 }} />}
         sx={{
           height: 48,
@@ -65,31 +66,6 @@ export default function IssueActions({ issue, copyToClipboard }: Props) {
         }}
       >
         Share link
-      </Button>
-
-      {/* Report */}
-      <Button
-        fullWidth
-        startIcon={<MSym name="error" sx={{ fontSize: 20 }} />}
-        sx={{
-          height: 48,
-          borderRadius: "12px",
-          justifyContent: "flex-start",
-          px: 3,
-          gap: 1,
-          bgcolor: "#310505",
-          border: "1px solid #ff0000",
-          color: "#ff0000",
-          fontWeight: 700,
-          fontSize: 16,
-          textTransform: "none",
-          "& .MuiButton-startIcon": { ml: 0 },
-          "&:hover": {
-            bgcolor: "rgba(239,68,68,0.14)"
-          }
-        }}
-      >
-        Report
       </Button>
     </Stack>
   );

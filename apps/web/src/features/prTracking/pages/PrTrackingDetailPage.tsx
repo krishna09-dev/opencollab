@@ -120,6 +120,29 @@ function TimelineItem({ item }: { item: PrTimelineEntry }) {
     );
   }
 
+  if (item.type === "comment") {
+    return (
+      <Paper elevation={0} sx={{ bgcolor: "#0b0f17", border: "1px solid #1e293b", borderRadius: "24px", overflow: "hidden" }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 2, borderBottom: "1px solid #1e293b", bgcolor: "rgba(15,23,42,0.5)" }}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Avatar sx={{ width: 24, height: 24, bgcolor: "#64748b" }}>{item.actor[0]?.toUpperCase()}</Avatar>
+            <Typography sx={{ color: "#fff", fontSize: 14, fontWeight: 500 }}>
+              {item.actor} <Box component="span" sx={{ color: "#94a3b8", fontWeight: 400 }}>commented {item.atLabel}</Box>
+            </Typography>
+          </Stack>
+          {item.isReview && (
+            <Box sx={{ borderRadius: 999, px: 1, py: 0.3, bgcolor: "rgba(96,165,250,0.2)", color: "#60a5fa", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+              Code Review
+            </Box>
+          )}
+        </Stack>
+        <Box sx={{ px: 3, py: 3 }}>
+          <Typography sx={{ color: "#cbd5e1", fontSize: 14, lineHeight: "22px", whiteSpace: "pre-wrap" }}>{item.body}</Typography>
+        </Box>
+      </Paper>
+    );
+  }
+
   return <Typography sx={{ color: "#64748b", fontSize: 14 }}>{item.body}</Typography>;
 }
 
@@ -183,15 +206,13 @@ export default function PrTrackingDetailPage() {
                 <MSym name="chevron_left" sx={{ fontSize: 18 }} />
               </Button>
               <Stack direction="row" spacing={1} alignItems="center">
-                <Typography sx={{ color: "#64748b", fontSize: 14 }}>opencollab</Typography>
-                <Typography sx={{ color: "#475569", fontSize: 14 }}>/</Typography>
-                <Typography sx={{ color: "#64748b", fontSize: 14 }}>{detail.repo || "core-engine"}</Typography>
-                <Typography sx={{ color: "#475569", fontSize: 14 }}>/</Typography>
-                <Typography sx={{ color: "#fff", fontSize: 14 }}>Pull Request #{detail.number ?? "--"}</Typography>
+                <Typography sx={{ color: "#fff", fontSize: 14 }}>
+                  {detail.owner && detail.repo ? `${detail.owner}/${detail.repo}` : detail.repo || detail.owner || "--"}
+                </Typography>
               </Stack>
             </Stack>
 
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+            <Stack direction="row" alignItems="flex-start" spacing={2}>
               <Box>
                 <Typography sx={{ fontSize: 42 / 1.4, fontWeight: 700 }}>
                   {detail.title} <Box component="span" sx={{ color: "#64748b", fontWeight: 400 }}>#{detail.number}</Box>
@@ -214,15 +235,6 @@ export default function PrTrackingDetailPage() {
                   ))}
                 </Stack>
               </Box>
-
-              <Stack direction="row" spacing={1.5}>
-                <Button sx={{ height: 40, borderRadius: "16px", px: 2.25, textTransform: "none", color: "#f1f5f9", border: "1px solid #334155" }} startIcon={<MSym name="share" sx={{ fontSize: 14 }} />}>
-                  Share
-                </Button>
-                <Button onClick={() => navigate("/pr-tracking")} sx={{ height: 40, borderRadius: "16px", px: 2.25, textTransform: "none", bgcolor: "#19e66b", color: "#050509", fontWeight: 700 }}>
-                  New Pull Request
-                </Button>
-              </Stack>
             </Stack>
 
             <Box sx={{ mt: 3, display: "grid", gridTemplateColumns: { xs: "1fr", lg: "7fr 3fr" }, gap: 4 }}>
@@ -254,11 +266,15 @@ export default function PrTrackingDetailPage() {
                       </Box>
                     )}
 
-                    <Divider sx={{ borderColor: "#1e293b", my: 2 }} />
-                    <Typography sx={{ color: "#94a3b8", fontSize: 14 }}>
-                      <MSym name="link" sx={{ fontSize: 12, mr: 0.8, verticalAlign: "middle" }} />
-                      Fixes <Box component="span" sx={{ color: "#19e66b" }}>#{detail.overview.linkedIssue.number}</Box>: "{detail.overview.linkedIssue.title}"
-                    </Typography>
+                    {detail.overview.linkedIssue ? (
+                      <>
+                        <Divider sx={{ borderColor: "#1e293b", my: 2 }} />
+                        <Typography sx={{ color: "#94a3b8", fontSize: 14 }}>
+                          <MSym name="link" sx={{ fontSize: 12, mr: 0.8, verticalAlign: "middle" }} />
+                          Fixes <Box component="span" sx={{ color: "#19e66b" }}>#{detail.overview.linkedIssue.number}</Box>: "{detail.overview.linkedIssue.title}"
+                        </Typography>
+                      </>
+                    ) : null}
                   </Box>
                 </Paper>
 
@@ -268,7 +284,7 @@ export default function PrTrackingDetailPage() {
                     {detail.timeline.map((entry) => (
                       <Box key={entry.id} sx={{ position: "relative" }}>
                         <Box sx={{ position: "absolute", left: -57, top: 0, width: 40, height: 40, borderRadius: 999, border: "4px solid #050509", bgcolor: entry.type === "maintainerFeedback" ? "#19e66b" : "#0f172a", display: "grid", placeItems: "center", color: entry.type === "maintainerFeedback" ? "#050509" : "#94a3b8" }}>
-                          <MSym name={entry.type === "commits" ? "commit" : entry.type === "reviewRequested" ? "person_add" : entry.type === "changesRequested" ? "warning" : entry.type === "maintainerFeedback" ? "check" : entry.type === "restriction" ? "lock" : "radio_button_checked"} sx={{ fontSize: 12 }} />
+                          <MSym name={entry.type === "commits" ? "commit" : entry.type === "reviewRequested" ? "person_add" : entry.type === "changesRequested" ? "warning" : entry.type === "maintainerFeedback" ? "check" : entry.type === "restriction" ? "lock" : entry.type === "comment" ? "chat_bubble" : "radio_button_checked"} sx={{ fontSize: 12 }} />
                         </Box>
                         <TimelineItem item={entry} />
                       </Box>
@@ -281,17 +297,21 @@ export default function PrTrackingDetailPage() {
                 <Paper elevation={0} sx={{ bgcolor: "#0b0f17", border: "1px solid #1e293b", borderRadius: "24px", p: 2.5 }}>
                   <Typography sx={{ color: "#94a3b8", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.4 }}>Reviewers</Typography>
                   <Stack spacing={2} sx={{ mt: 2 }}>
-                    {detail.sidebar.reviewers.map((reviewer) => (
-                      <Stack key={reviewer.id} direction="row" justifyContent="space-between" alignItems="center">
-                        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ opacity: reviewer.status === "pending" ? 0.6 : 1 }}>
-                          <Avatar sx={{ width: 32, height: 32, border: "1px solid #334155", bgcolor: reviewer.name === "john_dev" ? "#1e293b" : "#64748b" }}>
-                            {reviewer.name === "john_dev" ? "JD" : reviewer.name[0].toUpperCase()}
-                          </Avatar>
-                          <Typography sx={{ color: "#cbd5e1", fontSize: 14 }}>{reviewer.name}</Typography>
+                    {detail.sidebar.reviewers.length > 0 ? (
+                      detail.sidebar.reviewers.map((reviewer) => (
+                        <Stack key={reviewer.id} direction="row" justifyContent="space-between" alignItems="center">
+                          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ opacity: reviewer.status === "pending" ? 0.6 : 1 }}>
+                            <Avatar sx={{ width: 32, height: 32, border: "1px solid #334155", bgcolor: reviewer.name === "john_dev" ? "#1e293b" : "#64748b" }}>
+                              {reviewer.name === "john_dev" ? "JD" : reviewer.name[0].toUpperCase()}
+                            </Avatar>
+                            <Typography sx={{ color: "#cbd5e1", fontSize: 14 }}>{reviewer.name}</Typography>
+                          </Stack>
+                          <ReviewerStatus status={reviewer.status} />
                         </Stack>
-                        <ReviewerStatus status={reviewer.status} />
-                      </Stack>
-                    ))}
+                      ))
+                    ) : (
+                      <Typography sx={{ color: "#64748b", fontSize: 13 }}>No reviewers yet.</Typography>
+                    )}
                   </Stack>
                 </Paper>
 
@@ -302,31 +322,39 @@ export default function PrTrackingDetailPage() {
                   </Stack>
 
                   <Stack spacing={1.6} sx={{ mt: 2 }}>
-                    {detail.sidebar.checks.map((check) => (
-                      <Box key={check.id}>
-                        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
-                          <Stack direction="row" spacing={1.5} alignItems="center">
-                            <CheckIcon status={check.status} />
-                            <Typography sx={{ color: "#cbd5e1", fontSize: 14 }}>{check.name}</Typography>
+                    {detail.sidebar.checks.length > 0 ? (
+                      detail.sidebar.checks.map((check) => (
+                        <Box key={check.id}>
+                          <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
+                            <Stack direction="row" spacing={1.5} alignItems="center">
+                              <CheckIcon status={check.status} />
+                              <Typography sx={{ color: "#cbd5e1", fontSize: 14 }}>{check.name}</Typography>
+                            </Stack>
+                            <Typography sx={{ color: "#64748b", fontSize: 10 }}>{check.durationLabel}</Typography>
                           </Stack>
-                          <Typography sx={{ color: "#64748b", fontSize: 10 }}>{check.durationLabel}</Typography>
-                        </Stack>
-                        {check.status !== "running" ? (
-                          <LinearProgress variant="determinate" value={check.progress} sx={{ mt: 0.8, height: 4, borderRadius: 999, bgcolor: "rgba(25,230,107,0.15)", "& .MuiLinearProgress-bar": { bgcolor: "#19e66b" } }} />
-                        ) : null}
-                      </Box>
-                    ))}
+                          {check.status !== "running" ? (
+                            <LinearProgress variant="determinate" value={check.progress} sx={{ mt: 0.8, height: 4, borderRadius: 999, bgcolor: "rgba(25,230,107,0.15)", "& .MuiLinearProgress-bar": { bgcolor: "#19e66b" } }} />
+                          ) : null}
+                        </Box>
+                      ))
+                    ) : (
+                      <Typography sx={{ color: "#64748b", fontSize: 13 }}>No checks found for this pull request.</Typography>
+                    )}
                   </Stack>
                 </Paper>
 
                 <Paper elevation={0} sx={{ bgcolor: "#0b0f17", border: "1px solid #1e293b", borderRadius: "24px", p: 2.5 }}>
                   <Typography sx={{ color: "#94a3b8", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.4 }}>Linked Issues</Typography>
-                  <Box sx={{ mt: 2, borderRadius: "16px", border: "1px solid #1e293b", bgcolor: "rgba(15,23,42,0.5)", px: 1.6, py: 1.5 }}>
-                    <Typography sx={{ color: "#e2e8f0", fontSize: 14, fontWeight: 500 }}>{detail.sidebar.linkedIssue.title}</Typography>
-                    <Typography sx={{ color: "#64748b", fontSize: 11, mt: 0.5 }}>
-                      #{detail.sidebar.linkedIssue.number} · Opened by {detail.sidebar.linkedIssue.openedBy}
-                    </Typography>
-                  </Box>
+                  {detail.sidebar.linkedIssue ? (
+                    <Box sx={{ mt: 2, borderRadius: "16px", border: "1px solid #1e293b", bgcolor: "rgba(15,23,42,0.5)", px: 1.6, py: 1.5 }}>
+                      <Typography sx={{ color: "#e2e8f0", fontSize: 14, fontWeight: 500 }}>{detail.sidebar.linkedIssue.title}</Typography>
+                      <Typography sx={{ color: "#64748b", fontSize: 11, mt: 0.5 }}>
+                        #{detail.sidebar.linkedIssue.number} · Opened by {detail.sidebar.linkedIssue.openedBy}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Typography sx={{ color: "#64748b", fontSize: 13, mt: 2 }}>No linked issue metadata available.</Typography>
+                  )}
                 </Paper>
 
                 <Paper elevation={0} sx={{ bgcolor: "#0b0f17", border: "1px solid #1e293b", borderRadius: "24px", p: 2.5 }}>
@@ -336,18 +364,22 @@ export default function PrTrackingDetailPage() {
                   </Stack>
 
                   <Stack spacing={1.25} sx={{ mt: 2 }}>
-                    {detail.sidebar.filesChanged.map((file) => (
-                      <Stack key={file.path} direction="row" justifyContent="space-between" alignItems="center">
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <MSym name="description" sx={{ fontSize: 12, color: "#94a3b8" }} />
-                          <Typography sx={{ color: "#cbd5e1", fontSize: 12 }}>{file.path}</Typography>
+                    {detail.sidebar.filesChanged.length > 0 ? (
+                      detail.sidebar.filesChanged.map((file) => (
+                        <Stack key={file.path} direction="row" justifyContent="space-between" alignItems="center">
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <MSym name="description" sx={{ fontSize: 12, color: "#94a3b8" }} />
+                            <Typography sx={{ color: "#cbd5e1", fontSize: 12 }}>{file.path}</Typography>
+                          </Stack>
+                          <Stack direction="row" spacing={0.5}>
+                            <Typography sx={{ color: "#19e66b", fontSize: 10, fontWeight: 700 }}>+{file.additions}</Typography>
+                            <Typography sx={{ color: "#ef4444", fontSize: 10, fontWeight: 700 }}>-{file.deletions}</Typography>
+                          </Stack>
                         </Stack>
-                        <Stack direction="row" spacing={0.5}>
-                          <Typography sx={{ color: "#19e66b", fontSize: 10, fontWeight: 700 }}>+{file.additions}</Typography>
-                          <Typography sx={{ color: "#ef4444", fontSize: 10, fontWeight: 700 }}>-{file.deletions}</Typography>
-                        </Stack>
-                      </Stack>
-                    ))}
+                      ))
+                    ) : (
+                      <Typography sx={{ color: "#64748b", fontSize: 13 }}>No changed files data available yet.</Typography>
+                    )}
                   </Stack>
 
                   <Button sx={{ mt: 2, width: "100%", height: 36, borderRadius: "16px", textTransform: "none", color: "#94a3b8", border: "1px solid #334155" }}>

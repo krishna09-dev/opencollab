@@ -6,6 +6,15 @@ export async function fetchIssue(id: string) {
   return res.data;
 }
 
+export async function refreshIssue(id: string) {
+  const res = await api.post<{ message: string; issue: IssueDto; nextAllowedInSec?: number }>(
+    `/api/issues/${id}/refresh`,
+    {},
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
 export async function claimIssue(id: string) {
   const res = await api.post<{ message: string; issue: IssueDto }>(
     `/api/issues/${id}/claim`,
@@ -40,6 +49,15 @@ export async function fetchCurrentUser() {
 
 export async function fetchNotifications() {
   const res = await api.get<NotificationDto[]>("/api/notifications", { headers: authHeaders() });
+  return res.data;
+}
+
+export async function markAllNotificationsRead() {
+  const res = await api.post<{ message: string; notifications: NotificationDto[] }>(
+    "/api/notifications/read-all",
+    {},
+    { headers: authHeaders() }
+  );
   return res.data;
 }
 
