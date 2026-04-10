@@ -1,5 +1,6 @@
 """Recommendation service using TF-IDF similarity."""
 
+import os
 from typing import List
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -15,9 +16,10 @@ from utils.text_processing import (
 )
 
 DIFFICULTY_MAP = {"beginner": 1, "intermediate": 2, "advanced": 3}
-MAX_PER_REPO = 3
-MIN_SCORE_THRESHOLD = 0.5
-MAX_RECOMMENDATIONS = 5
+MAX_PER_REPO = 5
+MIN_SCORE_THRESHOLD = float(os.getenv("REC_MIN_SCORE_THRESHOLD", "0.1"))
+MAX_RECOMMENDATIONS = 10
+FALLBACK_TOP_K = 5
 
 
 def compute_recommendations(
@@ -62,39 +64,68 @@ def compute_recommendations(
     # Filter by difficulty level
     user_level = DIFFICULTY_MAP.get(user.difficulty.lower(), 2)
 
-    # Create scored issues list
+    # Create scored issues list with difficulty filtering
+    scored_issues = _build_scored_issues(
+        issues,
+        similarities,
+        user_level=user_level,
+        enforce_difficulty=True
+    )
+
+    # If strict difficulty filtering gives fewer than FALLBACK_TOP_K results,
+    # relax it to include all issues so users always see enough content.
+    if len(scored_issues) < FALLBACK_TOP_K:
+        scored_issues = _build_scored_issues(
+            issues,
+            similarities,
+            user_level=user_level,
+            enforce_difficulty=False
+        )
+
+    if not scored_issues:
+        return []
+
+    # Sort by similarity score
+    scored_issues.sort(key=lambda x: x["score"], reverse=True)
+
+    # Filter out low-confidence matches. If the threshold removes too many,
+    # return top FALLBACK_TOP_K so the feed always shows meaningful content.
+    above_threshold = [item for item in scored_issues if item["score"] >= MIN_SCORE_THRESHOLD]
+    candidate_issues = above_threshold if len(above_threshold) >= FALLBACK_TOP_K else scored_issues[:FALLBACK_TOP_K]
+
+    # Cap at MAX_RECOMMENDATIONS (top 10)
+    effective_top_n = min(top_n, MAX_RECOMMENDATIONS)
+
+    # Apply diversity constraints (max per repo)
+    diverse_results = _apply_diversity_constraints(candidate_issues, effective_top_n)
+
+    # Build recommendations
+    return _build_recommendations(diverse_results)
+
+
+def _build_scored_issues(
+    issues: List[DatabaseIssue],
+    similarities,
+    user_level: int,
+    enforce_difficulty: bool
+) -> List[dict]:
+    """Build scored issues, optionally enforcing user difficulty filtering."""
     scored_issues = []
     for idx, issue in enumerate(issues):
         issue_difficulty = infer_difficulty(issue)
         issue_level = DIFFICULTY_MAP.get(issue_difficulty, 2)
 
-        # Filter: only show issues at or below user's level
-        if issue_level <= user_level:
-            scored_issues.append({
-                "issue": issue,
-                "score": float(similarities[idx]),
-                "difficulty": issue_difficulty,
-                "language": infer_language_from_issue(issue)
-            })
+        if enforce_difficulty and issue_level > user_level:
+            continue
 
-    # Sort by similarity score
-    scored_issues.sort(key=lambda x: x["score"], reverse=True)
+        scored_issues.append({
+            "issue": issue,
+            "score": float(similarities[idx]),
+            "difficulty": issue_difficulty,
+            "language": infer_language_from_issue(issue)
+        })
 
-    # Filter out issues below the minimum score threshold (50%)
-    scored_issues = [item for item in scored_issues if item["score"] >= MIN_SCORE_THRESHOLD]
-
-    # If no issues pass the threshold, return empty (no AI recommendations)
-    if not scored_issues:
-        return []
-
-    # Cap at MAX_RECOMMENDATIONS (top 5)
-    effective_top_n = min(top_n, MAX_RECOMMENDATIONS)
-
-    # Apply diversity constraints (max per repo)
-    diverse_results = _apply_diversity_constraints(scored_issues, effective_top_n)
-
-    # Build recommendations
-    return _build_recommendations(diverse_results)
+    return scored_issues
 
 
 def _apply_diversity_constraints(

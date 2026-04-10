@@ -8,6 +8,22 @@ const router = Router();
 
 // ML Service URL (FastAPI running on port 8001)
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8001";
+const MIN_FALLBACK_SIMILARITY = 0.15;
+const MAX_FALLBACK_RESULTS = 10;
+const FALLBACK_TOP_K = 5;
+const RECOMMENDABLE_STATUSES: Array<"open" | "claimed"> = ["open", "claimed"];
+
+function claimedRankForRecommendation(item: { issue_status?: string; claimed_by?: string | null }) {
+  return item.issue_status === "claimed" || !!item.claimed_by ? 1 : 0;
+}
+
+function sortClaimedToBottom<T extends { issue_status?: string; claimed_by?: string | null }>(items: T[]) {
+  return [...items].sort((a, b) => {
+    const rankDelta = claimedRankForRecommendation(a) - claimedRankForRecommendation(b);
+    if (rankDelta !== 0) return rankDelta;
+    return 0;
+  });
+}
 
 /**
  * Simple fallback recommendation when ML service is unavailable.
@@ -90,41 +106,49 @@ function computeFallbackRecommendations(
       topics: (issue.requiredSkills || []).slice(0, 5).join(", "),
       similarity_score: Math.min(1, score / 10),
       summary: issue.summary || issue.body?.slice(0, 200) || "",
-      _score: score
+      claimed_by: issue.claimedByLogin || null,
+      issue_status: issue.status || "open",
+      _score: score,
+      _claimedRank: issue.status === "claimed" ? 1 : 0
     };
   });
 
-  // Sort by score and take top N
-  scored.sort((a, b) => b._score - a._score);
+  // Sort by claim rank first (open before claimed), then by score.
+  scored.sort((a, b) => {
+    if (a._claimedRank !== b._claimedRank) return a._claimedRank - b._claimedRank;
+    return b._score - a._score;
+  });
 
-  // Filter out items below 50% similarity threshold
-  const aboveThreshold = scored.filter(item => item.similarity_score >= 0.5);
+  // Keep high-confidence matches when possible, otherwise show top-5 fallback.
+  const aboveThreshold = scored.filter(
+    item => item.similarity_score >= MIN_FALLBACK_SIMILARITY
+  );
+  const candidatePool = aboveThreshold.length >= FALLBACK_TOP_K
+    ? aboveThreshold
+    : scored.slice(0, FALLBACK_TOP_K);
 
-  // If no items pass the threshold, return empty (no AI recommendations)
-  if (aboveThreshold.length === 0) return [];
-
-  // Diversify - max 3 per repo, cap at 5 recommendations
-  const maxResults = Math.min(topN, 5);
+  // Diversify - max 5 per repo, cap at 10 recommendations
+  const maxResults = Math.min(topN, MAX_FALLBACK_RESULTS);
   const repoCount: Record<string, number> = {};
-  const diverse = aboveThreshold.filter(item => {
+  const diverse = candidatePool.filter(item => {
     const count = repoCount[item.repo_name] || 0;
-    if (count >= 3) return false;
+    if (count >= 5) return false;
     repoCount[item.repo_name] = count + 1;
     return true;
   }).slice(0, maxResults);
 
-  // Remove internal score field
-  return diverse.map(({ _score, ...rest }) => rest);
+  // Keep the open-first ordering and remove internal fields.
+  return sortClaimedToBottom(diverse).map(({ _score, _claimedRank, ...rest }) => rest);
 }
 
 /**
- * Fetch open issues from the database and format for ML service.
+ * Fetch recommendable issues from the database and format for ML service.
  */
 async function fetchDatabaseIssues() {
-  // Fetch all open issues from MongoDB
-  const issues = await Issue.find({ status: "open" })
+  // Fetch open + claimed issues from MongoDB
+  const issues = await Issue.find({ status: { $in: RECOMMENDABLE_STATUSES } })
     .select(
-      "_id repoOwner repoName title body summary labels requiredSkills beginnerFriendly"
+      "_id repoOwner repoName title body summary labels requiredSkills beginnerFriendly status claimedByLogin"
     )
     .limit(500) // Limit for performance
     .lean();
@@ -139,7 +163,9 @@ async function fetchDatabaseIssues() {
     summary: issue.summary || "",
     labels: issue.labels || [],
     requiredSkills: issue.requiredSkills || [],
-    beginnerFriendly: issue.beginnerFriendly || false
+    beginnerFriendly: issue.beginnerFriendly || false,
+    status: issue.status || "open",
+    claimedByLogin: issue.claimedByLogin || null
   }));
 }
 
@@ -170,7 +196,7 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
         recommendations: [],
         method: "no-issues",
         userProfile: {},
-        message: "No open issues found in the database"
+        message: "No recommendable issues found in the database"
       });
     }
 
@@ -193,8 +219,29 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
       { timeout: 30000 }
     );
 
+    const issueMetaById = new Map(
+      databaseIssues.map((issue: any) => [
+        issue.id,
+        {
+          issue_status: issue.status || "open",
+          claimed_by: issue.claimedByLogin || null
+        }
+      ])
+    );
+
+    const recommendationsWithClaimState = sortClaimedToBottom(
+      (mlResponse.data.recommendations || []).map((item: any) => {
+        const issueMeta = issueMetaById.get(item.issue_id) || { issue_status: "open", claimed_by: null };
+        return {
+          ...item,
+          issue_status: issueMeta.issue_status,
+          claimed_by: issueMeta.claimed_by
+        };
+      })
+    );
+
     return res.json({
-      recommendations: mlResponse.data.recommendations,
+      recommendations: recommendationsWithClaimState,
       method: mlResponse.data.method,
       userProfile: userProfile,
       totalIssuesAnalyzed: mlResponse.data.total_issues_analyzed
@@ -261,14 +308,14 @@ router.get("/health", async (_req, res: Response) => {
     });
 
     // Also check database connection
-    const issueCount = await Issue.countDocuments({ status: "open" });
+    const issueCount = await Issue.countDocuments({ status: { $in: RECOMMENDABLE_STATUSES } });
 
     return res.json({
       status: "ok",
       mlService: mlResponse.data,
       database: {
         status: "connected",
-        openIssues: issueCount
+        openAndClaimedIssues: issueCount
       }
     });
   } catch (err: any) {
@@ -308,7 +355,7 @@ router.post("/custom", authRequired, async (req: AuthRequest, res: Response) => 
         recommendations: [],
         method: "no-issues",
         userProfile: userProfile,
-        message: "No open issues found in the database"
+        message: "No recommendable issues found in the database"
       });
     }
 
@@ -322,8 +369,29 @@ router.post("/custom", authRequired, async (req: AuthRequest, res: Response) => 
       { timeout: 30000 }
     );
 
+    const issueMetaById = new Map(
+      databaseIssues.map((issue: any) => [
+        issue.id,
+        {
+          issue_status: issue.status || "open",
+          claimed_by: issue.claimedByLogin || null
+        }
+      ])
+    );
+
+    const recommendationsWithClaimState = sortClaimedToBottom(
+      (mlResponse.data.recommendations || []).map((item: any) => {
+        const issueMeta = issueMetaById.get(item.issue_id) || { issue_status: "open", claimed_by: null };
+        return {
+          ...item,
+          issue_status: issueMeta.issue_status,
+          claimed_by: issueMeta.claimed_by
+        };
+      })
+    );
+
     return res.json({
-      recommendations: mlResponse.data.recommendations,
+      recommendations: recommendationsWithClaimState,
       method: mlResponse.data.method,
       userProfile: userProfile,
       totalIssuesAnalyzed: mlResponse.data.total_issues_analyzed
