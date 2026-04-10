@@ -1,4 +1,3 @@
-// apps/api/src/index.ts
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -30,17 +29,43 @@ import { startPrSyncWorker } from "./workers/prSync.worker";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5001;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const PORT = Number(process.env.PORT) || 5001;
+
+const allowedOrigins = (
+  process.env.ALLOWED_ORIGINS ||
+  [
+    "http://localhost:5173",
+    "https://opencollab.tech",
+    "https://www.opencollab.tech",
+    "https://opencollab.vercel.app"
+  ].join(",")
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // Middleware
 app.use(
   cors({
-    origin: FRONTEND_URL,
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true
   })
 );
+
 app.use(express.json());
+
+// Health Check
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
 
 // Routes
 app.use("/auth", authRoutes);
@@ -52,37 +77,23 @@ app.use("/api/resources", resourcesRoutes);
 app.use("/api/pr-tracking", prTrackingRoutes);
 app.use("/api/recommendations", recommendationsRoutes);
 app.use("/api/moderator", moderatorRequestsRoutes);
-
-
-// Internal/dev trigger endpoint: POST /api/ingestion/run
 app.use("/api/ingestion", ingestionRoutes);
-
-// Admin routes
 app.use("/api/admin", adminReposRoutes);
 app.use("/api/admin", adminIssuesRoutes);
 app.use("/api/admin", adminClaimsRoutes);
 app.use("/api/admin", adminPrsRoutes);
 app.use("/api/admin", adminAnalyticsRoutes);
 app.use("/api/admin", adminRequestsRoutes);
-
-// ML routes
 app.use("/api/ml", mlRoutes);
-
-// Reports routes
 app.use("/api/reports", reportsRoutes);
-
-// Health Check
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
 
 // Start server
 connectDB().then(() => {
-  // Start workers after DB is ready
   startIssueIngestionWorker();
   startPrSyncWorker();
 
   app.listen(PORT, () => {
     console.log(`🚀 API running at http://localhost:${PORT}`);
+    console.log("✅ Allowed CORS origins:", allowedOrigins);
   });
 });
