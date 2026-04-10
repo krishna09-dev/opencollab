@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 
 import MSym from "../../resources/components/MSym";
-import { fetchPrDetail } from "../api/prTrackingApi";
+import { fetchPrDetail, refreshSinglePr } from "../api/prTrackingApi";
 import AppLayout from "../../../components/layout/AppLayout";
 import type { PrDetailResponse, PrTimelineEntry } from "../types";
 
@@ -153,6 +153,9 @@ export default function PrTrackingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<PrDetailResponse | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -165,6 +168,7 @@ export default function PrTrackingDetailPage() {
         const res = await fetchPrDetail(id);
         if (!alive) return;
         setDetail(res);
+        setLastSyncedAt(new Date());
       } catch (e: any) {
         if (!alive) return;
         setError(e?.response?.data?.message || "Failed to load PR detail.");
@@ -177,6 +181,25 @@ export default function PrTrackingDetailPage() {
       alive = false;
     };
   }, [id]);
+
+  const handleSync = async () => {
+    if (!id || syncing) return;
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      // Write-through refresh: pull the latest PR state from GitHub into Mongo
+      // so the list page stays in sync too, then re-fetch the detail payload
+      // (which itself enriches timeline/comments/checks live from GitHub).
+      await refreshSinglePr(id);
+      const res = await fetchPrDetail(id);
+      setDetail(res);
+      setLastSyncedAt(new Date());
+    } catch (e: any) {
+      setSyncError(e?.response?.data?.message || "Failed to sync from GitHub.");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const statusChip = useMemo(() => (detail ? statusChipSx(detail.status) : statusChipSx("OPEN")), [detail]);
 
@@ -198,19 +221,59 @@ export default function PrTrackingDetailPage() {
 
         {!loading && !error && detail && (
           <>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
-              <Button
-                onClick={() => navigate("/pr-tracking")}
-                sx={{ minWidth: 32, width: 32, height: 32, borderRadius: "8px", p: 0, bgcolor: "#19e66b", color: "#050509" }}
-              >
-                <MSym name="chevron_left" sx={{ fontSize: 18 }} />
-              </Button>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Typography sx={{ color: "#fff", fontSize: 14 }}>
-                  {detail.owner && detail.repo ? `${detail.owner}/${detail.repo}` : detail.repo || detail.owner || "--"}
-                </Typography>
+            <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Button
+                  onClick={() => navigate("/pr-tracking")}
+                  sx={{ minWidth: 32, width: 32, height: 32, borderRadius: "8px", p: 0, bgcolor: "#19e66b", color: "#050509" }}
+                >
+                  <MSym name="chevron_left" sx={{ fontSize: 18 }} />
+                </Button>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography sx={{ color: "#fff", fontSize: 14 }}>
+                    {detail.owner && detail.repo ? `${detail.owner}/${detail.repo}` : detail.repo || detail.owner || "--"}
+                  </Typography>
+                </Stack>
+              </Stack>
+
+              <Stack direction="row" spacing={1.25} alignItems="center">
+                {lastSyncedAt && !syncing && (
+                  <Typography sx={{ color: "#64748b", fontSize: 11 }}>
+                    Last synced {lastSyncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </Typography>
+                )}
+                <Button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  startIcon={
+                    syncing
+                      ? <CircularProgress size={14} sx={{ color: "#60a5fa" }} />
+                      : <MSym name="refresh" sx={{ fontSize: 16 }} />
+                  }
+                  sx={{
+                    height: 34,
+                    borderRadius: "10px",
+                    px: 1.75,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    bgcolor: "rgba(96,165,250,0.1)",
+                    border: "1px solid rgba(96,165,250,0.25)",
+                    color: "#60a5fa",
+                    "&:hover": { bgcolor: "rgba(96,165,250,0.18)" },
+                    "&.Mui-disabled": { color: "rgba(96,165,250,0.5)" }
+                  }}
+                >
+                  {syncing ? "Syncing..." : "Sync from GitHub"}
+                </Button>
               </Stack>
             </Stack>
+
+            {syncError && (
+              <Paper elevation={0} sx={{ mb: 2, bgcolor: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px", px: 2, py: 1 }}>
+                <Typography sx={{ color: "#fecaca", fontSize: 13 }}>{syncError}</Typography>
+              </Paper>
+            )}
 
             <Stack direction="row" alignItems="flex-start" spacing={2}>
               <Box>
