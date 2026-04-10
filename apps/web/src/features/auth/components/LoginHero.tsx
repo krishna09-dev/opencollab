@@ -1,4 +1,5 @@
 import { Box, Button, Typography } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 import GitHubMark from "./GitHubMark";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
@@ -133,11 +134,19 @@ export default function LoginHero() {
         }}
       >
         By continuing, you agree to{" "}
-        <Box component="span" sx={{ textDecoration: "underline", cursor: "pointer" }}>
+        <Box
+          component={RouterLink}
+          to="/terms"
+          sx={{ textDecoration: "underline", color: "inherit", cursor: "pointer" }}
+        >
           Terms
         </Box>{" "}
         •{" "}
-        <Box component="span" sx={{ textDecoration: "underline", cursor: "pointer" }}>
+        <Box
+          component={RouterLink}
+          to="/privacy"
+          sx={{ textDecoration: "underline", color: "inherit", cursor: "pointer" }}
+        >
           Privacy
         </Box>
       </Typography>

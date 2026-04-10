@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -484,7 +484,22 @@ export default function PrTrackingPage() {
         </Stack>
 
         <Typography sx={{ mt: 4, color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
-          © 2023 OpenCollab Inc. · Terms · Privacy
+          © 2023 OpenCollab Inc. ·{" "}
+          <Box
+            component={RouterLink}
+            to="/terms"
+            sx={{ color: "#a1a1aa", textDecoration: "none", "&:hover": { color: "#e5e7eb" } }}
+          >
+            Terms
+          </Box>{" "}
+          ·{" "}
+          <Box
+            component={RouterLink}
+            to="/privacy"
+            sx={{ color: "#a1a1aa", textDecoration: "none", "&:hover": { color: "#e5e7eb" } }}
+          >
+            Privacy
+          </Box>
         </Typography>
       </Box>
 
