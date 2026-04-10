@@ -423,6 +423,8 @@ function IssueCard({ issue, isSaved, onToggleSave }: { issue: IssueRow; isSaved?
 
 function RecommendationCard({ recommendation, isSaved, onToggleSave }: { recommendation: RecommendationItem; isSaved?: boolean; onToggleSave?: (id: string, meta?: { title: string; repoOwner: string; repoName: string; repoLanguage?: string | null; labels?: string[]; beginnerFriendly?: boolean }) => void }) {
   const navigate = useNavigate();
+  const normalizedLanguage = recommendation.language?.trim();
+  const displayLanguage = normalizedLanguage && normalizedLanguage.toLowerCase() !== "unknown" ? normalizedLanguage : null;
 
   // Parse labels string to array
   const labelsArray = recommendation.labels
@@ -490,7 +492,7 @@ function RecommendationCard({ recommendation, isSaved, onToggleSave }: { recomme
         <Adjust sx={{ fontSize: 22, mt: 0.5, color: "#0df259" }} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: 12, color: "#a1a1aa", mb: 0.7, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-            {recommendation.repo_name} • {recommendation.language}
+            {recommendation.repo_name}{displayLanguage ? ` • ${displayLanguage}` : ""}
           </Typography>
           <Typography sx={{ fontSize: 30 / 1.6, fontWeight: 600, lineHeight: "28px", mb: 0.8, color: "#fff" }}>
             {recommendation.issue_title}

@@ -173,20 +173,49 @@ function mapReviewerStatus(reviewState: string | null | undefined): "approved" |
 export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarData | null) {
   const { owner, repo } = splitRepo(item.repoFullName);
   const prNumber = item.prNumber ?? null;
-  const displayStatus = toUiStatus(item);
+
+  // Prefer fresh GitHub values over stored DB values — this is what keeps the
+  // detail page from showing stale title/body/author/state between manual syncs.
+  const liveAuthor = githubSidebar?.prAuthor ?? item.prAuthor ?? null;
+  const liveTitle = githubSidebar?.prTitle ?? item.prTitle ?? null;
+  const liveBody = githubSidebar?.prBody ?? item.prBody ?? null;
+  const liveMergedAt = githubSidebar?.prMergedAt ?? (item.mergedAt ? new Date(item.mergedAt).toISOString() : null);
+  const liveClosedAt = githubSidebar?.prClosedAt ?? (item.closedAt ? new Date(item.closedAt).toISOString() : null);
+  const liveCreatedAt = githubSidebar?.prCreatedAt ?? item.createdAtGithub ?? item.createdAt ?? null;
+
+  // Derive the display status from live data when available so the chip
+  // reflects reality even before the next refresh tick writes to Mongo.
+  const syntheticItem = githubSidebar
+    ? {
+        ...item,
+        status: computeStatusFromPR({
+          state: githubSidebar.prState,
+          merged_at: githubSidebar.prMergedAt,
+          closed_at: githubSidebar.prClosedAt
+        }),
+        reviewState: (() => {
+          const reviews = (githubSidebar.timelineItems || []).filter((t: any) => t.type === "review") as Array<{ state: string }>;
+          if (!reviews.length) return item.reviewState ?? null;
+          const last = reviews[reviews.length - 1];
+          return last.state || item.reviewState || null;
+        })(),
+        requestedReviewersCount: (githubSidebar.reviewers || []).filter((r) => r.status === "pending").length
+      }
+    : item;
+
+  const displayStatus = toUiStatus(syntheticItem);
   const statusText = displayStatus === "CHANGES_REQUESTED" ? "OPEN" : displayStatus;
 
   // Build timeline dynamically from stored data + GitHub live data
   const timeline: any[] = [];
 
   // Always add "opened" event
-  const openedAt = item.createdAtGithub || item.createdAt;
   timeline.push({
     id: "opened",
     type: "opened",
-    actor: item.prAuthor || "unknown",
+    actor: liveAuthor || "unknown",
     text: "opened this pull request",
-    atLabel: timeAgo(openedAt)
+    atLabel: timeAgo(liveCreatedAt)
   });
 
   if (githubSidebar?.timelineItems && githubSidebar.timelineItems.length > 0) {
@@ -269,22 +298,22 @@ export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarDat
   }
 
   // Add merged event if merged
-  if (item.mergedAt) {
+  if (liveMergedAt) {
     timeline.push({
       id: "merged",
       type: "maintainerFeedback",
       title: "Merged",
-      body: `This pull request was merged ${timeAgo(item.mergedAt)}.`
+      body: `This pull request was merged ${timeAgo(liveMergedAt)}.`
     });
   }
 
   // Add closed event if closed without merge
-  if (item.closedAt && !item.mergedAt) {
+  if (liveClosedAt && !liveMergedAt) {
     timeline.push({
       id: "closed",
       type: "maintainerFeedback",
       title: "Closed",
-      body: `This pull request was closed ${timeAgo(item.closedAt)}.`
+      body: `This pull request was closed ${timeAgo(liveClosedAt)}.`
     });
   }
 
@@ -315,9 +344,19 @@ export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarDat
     ? githubSidebar.prLabels
     : (item.primaryLanguage ? [item.primaryLanguage] : []);
 
+  const liveSystemStatus = liveMergedAt
+    ? "Merged"
+    : liveClosedAt
+      ? "Closed"
+      : item.status === "MERGED"
+        ? "Merged"
+        : item.status === "CLOSED"
+          ? "Closed"
+          : "Open";
+
   return {
     id: String(item._id),
-    title: item.prTitle || item.issueTitle || (prNumber ? `Pull Request #${prNumber}` : "Pull Request"),
+    title: liveTitle || item.issueTitle || (prNumber ? `Pull Request #${prNumber}` : "Pull Request"),
     number: prNumber,
     owner,
     repo,
@@ -326,15 +365,15 @@ export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarDat
     targetBranch,
     tags,
     overview: {
-      author: item.prAuthor || "unknown",
-      commentedAtLabel: timeAgo(item.createdAtGithub || item.createdAt),
-      intro: item.prBody || item.issueTitle || "No description provided.",
+      author: liveAuthor || "unknown",
+      commentedAtLabel: timeAgo(liveCreatedAt),
+      intro: liveBody || item.issueTitle || "No description provided.",
       changes: [],
       note: null,
       linkedIssue: item.issueNumber ? {
         number: item.issueNumber,
         title: item.issueTitle || `Issue #${item.issueNumber}`,
-        openedBy: item.prAuthor || "unknown"
+        openedBy: liveAuthor || "unknown"
       } : null
     },
     timeline,
@@ -346,9 +385,9 @@ export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarDat
       linkedIssue: item.issueNumber ? {
         number: item.issueNumber,
         title: item.issueTitle || `Issue #${item.issueNumber}`,
-        openedBy: item.prAuthor || "unknown"
+        openedBy: liveAuthor || "unknown"
       } : null,
-      systemStatusLabel: item.status === "MERGED" ? "Merged" : item.status === "CLOSED" ? "Closed" : "Open",
+      systemStatusLabel: liveSystemStatus,
       additions: sidebarAdditions,
       deletions: sidebarDeletions
     }

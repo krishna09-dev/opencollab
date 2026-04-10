@@ -42,6 +42,17 @@ export type GitHubPrSidebarData = {
   prHeadRef: string;
   prBaseRef: string;
   prLabels: string[];
+  // Fresh PR metadata pulled live from GitHub on every detail request.
+  prTitle: string | null;
+  prBody: string | null;
+  prAuthor: string | null;
+  prState: "open" | "closed" | null;
+  prMergedAt: string | null;
+  prClosedAt: string | null;
+  prCreatedAt: string | null;
+  prUpdatedAt: string | null;
+  commentsCount: number;
+  reviewCommentsCount: number;
 };
 
 /**
@@ -570,6 +581,16 @@ export async function fetchPrSidebarData(params: {
     timelineItems,
     prHeadRef,
     prBaseRef,
-    prLabels
+    prLabels,
+    prTitle: pr?.title ?? null,
+    prBody: pr?.body ?? null,
+    prAuthor: pr?.user?.login ?? null,
+    prState: (pr?.state === "open" || pr?.state === "closed") ? pr.state : null,
+    prMergedAt: pr?.merged_at ?? null,
+    prClosedAt: pr?.closed_at ?? null,
+    prCreatedAt: pr?.created_at ?? null,
+    prUpdatedAt: pr?.updated_at ?? null,
+    commentsCount: Number(pr?.comments ?? 0),
+    reviewCommentsCount: Number(pr?.review_comments ?? 0)
   };
 }
