@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
+import LandingPage from "./features/landing/pages/LandingPage";
 import LoginPage from "./features/auth/pages/LoginPage";
 import AuthCallbackPage from "./features/auth/pages/AuthCallbackPage";
+import PrivacyPolicyPage from "./features/legal/pages/PrivacyPolicyPage";
+import TermsAndConditionsPage from "./features/legal/pages/TermsAndConditionsPage";
 import OnboardingPage from "./features/onboarding/pages/OnboardingPage";
 import HomePage from "./features/homeFeed/pages/HomePage";
 import IssueDetailPage from "./features/issueDetail/pages/IssueDetailPage";
@@ -34,8 +37,12 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Landing / login */}
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<TermsAndConditionsPage />} />
+        <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
+        <Route path="/terms-and-conditions" element={<Navigate to="/terms" replace />} />
 
         {/* GitHub OAuth callback */}
         <Route path="/auth/callback" element={<AuthCallbackPage />} />

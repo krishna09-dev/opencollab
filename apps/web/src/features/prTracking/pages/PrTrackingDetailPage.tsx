@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   Avatar,
   Box,
@@ -459,8 +459,20 @@ export default function PrTrackingDetailPage() {
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ maxWidth: 1440, mx: "auto" }}>
           <Stack direction="row" spacing={3}>
             <Typography sx={{ color: "#64748b", fontSize: 12 }}>© 2024 OpenCollab Inc.</Typography>
-            <Typography sx={{ color: "#64748b", fontSize: 12 }}>Terms</Typography>
-            <Typography sx={{ color: "#64748b", fontSize: 12 }}>Privacy</Typography>
+            <Typography
+              component={RouterLink}
+              to="/terms"
+              sx={{ color: "#64748b", fontSize: 12, textDecoration: "none", "&:hover": { color: "#e2e8f0" } }}
+            >
+              Terms
+            </Typography>
+            <Typography
+              component={RouterLink}
+              to="/privacy"
+              sx={{ color: "#64748b", fontSize: 12, textDecoration: "none", "&:hover": { color: "#e2e8f0" } }}
+            >
+              Privacy
+            </Typography>
             <Typography sx={{ color: "#64748b", fontSize: 12 }}>Security</Typography>
           </Stack>
           <Stack direction="row" spacing={1} alignItems="center">
