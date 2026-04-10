@@ -12,10 +12,8 @@ export async function ensureApprovedReposSeeded() {
           fullName,
           repoOwner: r.owner,
           repoName: r.repo,
+          isActive: r.isActive !== false,
           lastSyncedAt: null
-        },
-        $set: {
-          isActive: r.isActive !== false
         }
       },
       { upsert: true }

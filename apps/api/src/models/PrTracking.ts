@@ -44,13 +44,20 @@ export interface IPrTracking extends Document {
   mergedAtGithub?: Date | null;
 
   // PR participants (author + reviewers + commenters)
-  prAuthor?: string;
+  prAuthor?: string | null;
   prParticipants?: string[];
 
   // Linked issue (MongoDB ObjectId)
   issueId?: Types.ObjectId | null;
 
   status: PrStatus;
+
+  // Verification fields
+  isVerified: boolean;
+  verifiedBy?: Types.ObjectId | null;
+  verifiedAt?: Date | null;
+  isValid?: boolean | null;
+  verificationNote?: string | null;
 
   lastSyncAt?: Date | null;
   lastSystemSyncAt?: Date | null; // For scheduled worker syncs
@@ -105,6 +112,13 @@ const PrTrackingSchema = new Schema<IPrTracking>(
     issueId: { type: Schema.Types.ObjectId, ref: "Issue", default: null, index: true },
 
     status: { type: String, enum: ["ACCEPTED", "PR_OPEN", "MERGED", "CLOSED"], default: "ACCEPTED", index: true },
+
+    // Verification fields
+    isVerified: { type: Boolean, default: false, index: true },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    verifiedAt: { type: Date, default: null },
+    isValid: { type: Boolean, default: null },
+    verificationNote: { type: String, default: null },
 
     lastSyncAt: { type: Date, default: null },
     lastSystemSyncAt: { type: Date, default: null },

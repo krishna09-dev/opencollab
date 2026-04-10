@@ -14,6 +14,10 @@ const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
+function moderationErrorRedirect(code: string) {
+  return `${FRONTEND_URL}/moderation?error=${encodeURIComponent(code)}`;
+}
+
 // Optional: log once if something critical is missing
 if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET || !GITHUB_CALLBACK_URL) {
   console.error("⚠️ Missing GitHub OAuth env vars", {
@@ -33,7 +37,7 @@ router.get("/github", (_req: Request, res: Response) => {
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
     redirect_uri: GITHUB_CALLBACK_URL,
-    scope: "read:user user:email"
+    scope: "read:user user:email public_repo"
   });
 
   const githubAuthUrl = `https://github.com/login/oauth/authorize?${params.toString()}`;
@@ -43,6 +47,7 @@ router.get("/github", (_req: Request, res: Response) => {
 // 2) GitHub callback
 router.get("/github/callback", async (req: Request, res: Response) => {
   const code = req.query.code as string | undefined;
+  const loginState = typeof req.query.state === "string" ? req.query.state : "";
 
   if (!code) {
     return res.status(400).json({ message: "Missing `code` from GitHub" });
@@ -94,6 +99,44 @@ router.get("/github/callback", async (req: Request, res: Response) => {
       primaryEmail = undefined;
     }
 
+    if (loginState === "moderation") {
+      const githubId = String(ghUser.id || "");
+      const githubLogin = String(ghUser.login || "").trim();
+
+      if (!githubId || !githubLogin) {
+        return res.redirect(moderationErrorRedirect("github_profile_invalid"));
+      }
+
+      let moderatorUser = await User.findOne({ githubId });
+
+      if (!moderatorUser) {
+        moderatorUser = await User.create({
+          githubId,
+          login: githubLogin,
+          email: primaryEmail,
+          avatarUrl: ghUser.avatar_url,
+          githubAccessToken: accessToken,
+          role: "moderator"
+        });
+      } else {
+        moderatorUser.login = githubLogin;
+        moderatorUser.email = primaryEmail;
+        moderatorUser.avatarUrl = ghUser.avatar_url;
+        moderatorUser.githubAccessToken = accessToken;
+
+        // Keep existing admins as admin, otherwise grant moderator access for moderation login.
+        if (moderatorUser.role !== "admin") {
+          moderatorUser.role = "moderator";
+        }
+
+        await moderatorUser.save();
+      }
+
+      const token = signUserJwt({ userId: moderatorUser._id.toString() });
+      const redirectUrl = `${FRONTEND_URL}/moderation/callback?token=${token}`;
+      return res.redirect(redirectUrl);
+    }
+
     // 2.4 Upsert user in MongoDB
     let user = await User.findOne({ githubId: ghUser.id.toString() });
 
@@ -120,6 +163,9 @@ router.get("/github/callback", async (req: Request, res: Response) => {
     // return res.json({ token, user });
   } catch (err) {
     console.error("GitHub OAuth error:", err);
+    if (loginState === "moderation") {
+      return res.redirect(moderationErrorRedirect("oauth_failed"));
+    }
     return res.status(500).json({ message: "GitHub auth failed" });
   }
 });

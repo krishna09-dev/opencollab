@@ -81,6 +81,15 @@ function toPreview(text?: string | null): string | undefined {
   return compact.length > 150 ? `${compact.slice(0, 150)}...` : compact;
 }
 
+function extractPrNumber(prNumber?: number | null, prUrl?: string | null): number | null {
+  if (typeof prNumber === "number" && Number.isFinite(prNumber)) return prNumber;
+  if (!prUrl) return null;
+  const match = String(prUrl).match(/\/pull\/(\d+)(?:\D|$)/i);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function mapBackendItem(b: BackendPrItem): PrTrackingItem {
   const status = b.status;
   return {
@@ -88,7 +97,7 @@ function mapBackendItem(b: BackendPrItem): PrTrackingItem {
     title: b.prTitle || b.issueTitle || `Issue #${b.issueNumber}`,
     repoFullName: b.repoFullName,
     issueNumber: b.issueNumber,
-    prNumber: b.prNumber ?? null,
+    prNumber: extractPrNumber(b.prNumber ?? null, b.prUrl ?? null),
     prTitle: b.prTitle ?? null,
     prBody: b.prBody ?? null,
     prUrl: b.prUrl ?? null,

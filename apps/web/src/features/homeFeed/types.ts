@@ -15,6 +15,7 @@ export interface IssueRow {
   githubNumber: number;
   repoOwner: string;
   repoName: string;
+  repoLanguage?: string | null;
   title: string;
   body: string;
   summary: string;
@@ -27,6 +28,7 @@ export interface IssueRow {
   claimedByLogin?: string | null;
   githubUrl: string;
   commentsCount?: number;
+  difficulty?: string;
 }
 
 export interface FeedPagination {

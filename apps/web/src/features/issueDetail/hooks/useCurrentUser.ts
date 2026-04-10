@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchCurrentUser, fetchNotifications } from "../api/issueDetailApi";
+import { fetchCurrentUser, fetchNotifications, markAllNotificationsRead } from "../api/issueDetailApi";
 import type { CurrentUser, NotificationDto } from "../types";
 
 export function useCurrentUser() {
@@ -30,11 +30,29 @@ export function useCurrentUser() {
     }
   };
 
+  const markNotificationsReadAll = async () => {
+    try {
+      const data = await markAllNotificationsRead();
+      setNotifications(data.notifications || []);
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  };
+
   useEffect(() => {
     loadUser();
     loadNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { currentUser, loadingUser, notifications, unreadCount, loadNotifications };
+  return {
+    currentUser,
+    loadingUser,
+    notifications,
+    unreadCount,
+    loadNotifications,
+    markNotificationsReadAll
+  };
 }

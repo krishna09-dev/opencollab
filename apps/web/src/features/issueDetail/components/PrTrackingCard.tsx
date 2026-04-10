@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import {
-  Box,
   Button,
   CircularProgress,
   Paper,
@@ -18,7 +17,9 @@ import {
 
 type Props = {
   issueId: string;
+  canSubmit: boolean;
   showToast: (message: string, severity: "success" | "error" | "info") => void;
+  onIssueUpdated?: () => Promise<void> | void;
 };
 
 function statusChip(status: string) {
@@ -42,7 +43,7 @@ function formatDate(dateStr?: string | null): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function PrTrackingCard({ issueId, showToast }: Props) {
+export default function PrTrackingCard({ issueId, canSubmit, showToast, onIssueUpdated }: Props) {
   const [prUrl, setPrUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,6 +74,7 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
       const res = await submitPrForIssue(issueId, prUrl.trim());
       setPrData(res.item);
       setPrUrl("");
+      await onIssueUpdated?.();
       showToast("PR submitted successfully", "success");
     } catch (err: any) {
       const msg = err?.response?.data?.message || "Failed to submit PR";
@@ -89,6 +91,7 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
     try {
       const res = await refreshPrTracking(prData._id);
       setPrData(res.item);
+      await onIssueUpdated?.();
       showToast("PR refreshed", "success");
     } catch (err: any) {
       showToast(err?.response?.data?.message || "Failed to refresh PR", "error");
@@ -107,10 +110,23 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
     );
   }
 
+  const hasSubmittedPr = Boolean(
+    prData && (
+      (typeof prData.prNumber === "number" && Number.isFinite(prData.prNumber) && prData.prNumber > 0)
+      || Boolean(prData.prUrl)
+      || Boolean(prData.prTitle)
+    )
+  );
+
   // Show PR details if we have data
-  if (prData) {
+  if (prData && hasSubmittedPr) {
     const chip = statusChip(displayStatus(prData.status));
     const [owner, repo] = (prData.repoFullName || "").split("/");
+    const hasPrNumber = typeof prData.prNumber === "number" && Number.isFinite(prData.prNumber) && prData.prNumber > 0;
+    const prHref = prData.prUrl || (hasPrNumber
+      ? `https://github.com/${prData.repoFullName}/pull/${prData.prNumber}`
+      : `https://github.com/${prData.repoFullName}`);
+    const prLabel = prData.prTitle || (hasPrNumber ? `PR #${prData.prNumber}` : "View Pull Request");
 
     return (
       <Paper
@@ -149,7 +165,7 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
         {/* Title + link */}
         <Typography
           component="a"
-          href={prData.prUrl || "#"}
+          href={prHref}
           target="_blank"
           rel="noopener noreferrer"
           sx={{
@@ -162,7 +178,7 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
             "&:hover": { textDecoration: "underline" }
           }}
         >
-          {prData.prTitle || `PR #${prData.prNumber}`}
+          {prLabel}
         </Typography>
 
         {/* Repo + status chip */}
@@ -242,6 +258,12 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
         Submit Pull Request
       </Typography>
 
+      {!canSubmit && (
+        <Typography sx={{ color: "#6b7280", fontSize: 12, mb: 1.5 }}>
+          Claim this issue first to submit a PR URL for moderation.
+        </Typography>
+      )}
+
       <TextField
         fullWidth
         size="small"
@@ -249,6 +271,7 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
         onChange={(e) => { setPrUrl(e.target.value); setSubmitError(null); }}
         placeholder="https://github.com/owner/repo/pull/123"
         onKeyDown={(e) => { if (e.key === "Enter" && !submitting) handleSubmit(); }}
+        disabled={!canSubmit}
         sx={{
           mb: 1,
           "& .MuiOutlinedInput-root": {
@@ -264,6 +287,10 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
         }}
       />
 
+      <Typography sx={{ color: "#6b7280", fontSize: 11, mb: 1 }}>
+        PR must be from this issue repository, that repository must be approved in OpenCollab, and the issue must be claimed by you.
+      </Typography>
+
       {submitError && (
         <Typography sx={{ color: "#fca5a5", fontSize: 12, mb: 1 }}>
           {submitError}
@@ -273,7 +300,7 @@ export default function PrTrackingCard({ issueId, showToast }: Props) {
       <Button
         fullWidth
         onClick={handleSubmit}
-        disabled={!prUrl.trim() || submitting}
+        disabled={!canSubmit || !prUrl.trim() || submitting}
         sx={{
           height: 40,
           borderRadius: "10px",

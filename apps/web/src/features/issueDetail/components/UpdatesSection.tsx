@@ -47,15 +47,22 @@ export default function UpdatesSection({ issue }: Props) {
                 .slice()
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                 .map((u, idx, arr) => {
-                  const isOpened = u.id.startsWith("gh_opened");
-                  const isOpenCollab = u.actorRole === "OPENCOLLAB";
                   const body = (u.body || "").toLowerCase();
+                  const isOpened = u.id.startsWith("gh_opened");
+                  const isClosed =
+                    u.id.startsWith("gh_closed") ||
+                    (u.actorRole === "GITHUB" && (body.includes("closed this issue") || body.includes("issue has been closed")));
+                  const isOpenCollab = u.actorRole === "OPENCOLLAB";
+                  const isPrEvent = u.actorRole === "GITHUB_PR" || u.id.startsWith("pr_");
 
                   const isClaimed = isOpenCollab && (u.id.startsWith("claim") || body.includes("claimed this issue"));
                   const isAborted = isOpenCollab && (u.id.startsWith("abort") || body.includes("aborted this issue"));
+                  const isPrOpened = isPrEvent && (u.id.includes("pr_opened") || body.includes("was opened"));
+                  const isPrMerged = isPrEvent && (u.id.includes("pr_merged") || body.includes("was merged"));
+                  const isPrClosed = isPrEvent && (u.id.includes("pr_closed") || body.includes("was closed"));
 
-                  const isSystemEvent = isOpened || isClaimed || isAborted;
-                  const isGithubComment = u.id.startsWith("gh_") && !isOpened;
+                  const isSystemEvent = isOpened || isClosed || isClaimed || isAborted || isPrEvent;
+                  const isGithubComment = u.id.startsWith("gh_") && !isOpened && !isClosed;
                   const isMaintainer = u.actorRole === "OWNER" || u.actorRole === "MEMBER";
 
                   const ring = (color: string) => ({
@@ -82,6 +89,10 @@ export default function UpdatesSection({ issue }: Props) {
                     <Box sx={ring("#22c55e")}>
                       <Box sx={dot("#22c55e")} />
                     </Box>
+                  ) : isClosed ? (
+                    <Box sx={ring("#c084fc")}>
+                      <MSym name="check_circle" sx={{ fontSize: 14, color: "#c084fc" }} />
+                    </Box>
                   ) : isClaimed ? (
                     <Box sx={ring("#22c55e")}>
                       <MSym name="back_hand" sx={{ fontSize: 12, color: "#22c55e" }} />
@@ -89,6 +100,18 @@ export default function UpdatesSection({ issue }: Props) {
                   ) : isAborted ? (
                     <Box sx={ring("#ef4444")}>
                       <Box sx={dot("#ef4444")} />
+                    </Box>
+                  ) : isPrMerged ? (
+                    <Box sx={ring("#c084fc")}>
+                      <MSym name="merge" sx={{ fontSize: 14, color: "#c084fc" }} />
+                    </Box>
+                  ) : isPrOpened ? (
+                    <Box sx={ring("#60a5fa")}>
+                      <MSym name="code" sx={{ fontSize: 14, color: "#60a5fa" }} />
+                    </Box>
+                  ) : isPrClosed ? (
+                    <Box sx={ring("#f59e0b")}>
+                      <MSym name="cancel" sx={{ fontSize: 14, color: "#f59e0b" }} />
                     </Box>
                   ) : (
                     <Avatar
@@ -106,10 +129,14 @@ export default function UpdatesSection({ issue }: Props) {
 
                   const actionText = isOpened
                     ? "opened this issue"
+                    : isClosed
+                    ? "Issue has been closed"
                     : isClaimed
                     ? "claimed this issue"
                     : isAborted
                     ? "aborted this issue"
+                    : isPrEvent
+                    ? "" // PR events use their body text directly
                     : "";
 
                   return (
@@ -147,10 +174,10 @@ export default function UpdatesSection({ issue }: Props) {
                         {isSystemEvent ? (
                           <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
                             <Typography sx={{ fontSize: 18, fontWeight: 500, color: "#fff", lineHeight: 1 }}>
-                              {u.actorLogin}
+                              {isPrEvent || isClosed ? "" : u.actorLogin}
                             </Typography>
-                            <Typography sx={{ fontSize: 18, fontWeight: 500, color: "#adadad", lineHeight: 1 }}>
-                              {actionText}
+                            <Typography sx={{ fontSize: 18, fontWeight: 500, color: isPrEvent ? (isPrMerged ? "#c084fc" : isPrClosed ? "#f59e0b" : "#60a5fa") : "#adadad", lineHeight: 1 }}>
+                              {isPrEvent ? u.body : actionText}
                             </Typography>
                             <Typography sx={{ fontSize: 16, fontWeight: 400, color: "#adadad", lineHeight: 1 }}>
                               • {timeAgo(u.createdAt)}

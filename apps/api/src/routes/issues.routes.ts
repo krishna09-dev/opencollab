@@ -10,7 +10,7 @@ import {
   abortIssueSchema,
   notifyIssueSchema
 } from "../validators/issues.validator";
-import { issuesService } from "../services/issues.service";
+import { inferIssueDifficulty, issuesService } from "../services/issues.service";
 
 const router = Router();
 
@@ -22,6 +22,17 @@ router.get("/stats", authRequired, async (_req: AuthRequest, res: Response) => {
   } catch (err) {
     console.error("GET /api/issues/stats error:", err);
     return res.status(500).json({ message: "Failed to load stats" });
+  }
+});
+
+// GET /api/issues/languages
+router.get("/languages", authRequired, async (_req: AuthRequest, res: Response) => {
+  try {
+    const languages = await issuesService.getAvailableLanguages();
+    return res.json({ languages });
+  } catch (err) {
+    console.error("GET /api/issues/languages error:", err);
+    return res.status(500).json({ message: "Failed to load issue languages" });
   }
 });
 
@@ -71,7 +82,10 @@ router.get(
         return res.status(404).json({ message: "Issue not found" });
       }
 
-      return res.json(issue);
+      const issueObj: any = typeof (issue as any).toObject === "function" ? (issue as any).toObject() : issue;
+      issueObj.difficulty = inferIssueDifficulty(issueObj);
+
+      return res.json(issueObj);
     } catch (err) {
       console.error("GET /api/issues/:id error:", err);
       return res.status(500).json({ message: "Failed to load issue" });

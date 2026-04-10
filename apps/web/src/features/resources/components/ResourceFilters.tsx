@@ -29,14 +29,11 @@ function MSym({ name, sx }: { name: string; sx?: any }) {
 
 const categories: (ResourceCategory | "All")[] = [
   "All",
-  "Git",
-  "GitHub",
-  "Project Setup",
-  "Debugging",
-  "Testing",
-  "CI/CD",
-  "Docs",
-  "General"
+  "Git Basics",
+  "Pull Requests",
+  "Programming Docs",
+  "CLI Mastery",
+  "Bug Fixing"
 ];
 
 const difficulties: (ResourceDifficulty | "All")[] = ["All", "beginner", "intermediate", "advanced"];

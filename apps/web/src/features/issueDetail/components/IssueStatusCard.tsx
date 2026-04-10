@@ -26,8 +26,16 @@ export default function IssueStatusCard({
   handleAbort,
   handleNotify
 }: Props) {
-  const canAbort = isClaimedByMe;
-  const isClosed = issue.status === "closed";
+  const hasClosedUpdate = (issue.updates || []).some((u) => {
+    const id = String(u?.id || "");
+    const body = String(u?.body || "").toLowerCase();
+    const isGithubCloseMessage =
+      u?.actorRole === "GITHUB" && (body.includes("closed this issue") || body.includes("issue has been closed"));
+    return id.startsWith("gh_closed") || isGithubCloseMessage;
+  });
+
+  const isClosed = issue.status === "closed" || hasClosedUpdate;
+  const canAbort = isClaimedByMe && !isClosed;
 
   return (
     <Paper
@@ -120,7 +128,7 @@ export default function IssueStatusCard({
           )}
         </Stack>
 
-        {isClaimedByOther && (
+        {isClaimedByOther && !isClosed && (
           <Button
             fullWidth
             onClick={handleNotify}

@@ -36,6 +36,9 @@ export interface IssueDto {
   githubNumber: number;
   repoOwner: string;
   repoName: string;
+  repoLanguage?: string | null;
+  difficulty?: "beginner" | "intermediate" | "advanced";
+  difficultyOverride?: "beginner" | "intermediate" | "advanced" | null;
 
   title: string;
   body: string;
@@ -65,6 +68,8 @@ export interface IssueDto {
   autoSetupCommands: SetupInstruction[];
   projectSetupCommands?: SetupInstruction[];
   maintainerSetupNotes?: string | null;
+  repositoryReadme?: string | null;
+  repositoryReadmeUrl?: string | null;
 
   prStatus: PrStatus;
   lastPrMessage?: string | null;
@@ -80,6 +85,7 @@ export interface CurrentUser {
   login: string;
   email?: string;
   avatarUrl?: string;
+  role?: "user" | "admin";
 }
 
 export interface NotificationDto {

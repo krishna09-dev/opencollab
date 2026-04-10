@@ -39,14 +39,11 @@ type Props = {
 /* ================= CONSTANTS ================= */
 
 const CATEGORIES: ResourceCategory[] = [
-  "Git",
-  "GitHub",
-  "Project Setup",
-  "Debugging",
-  "Testing",
-  "CI/CD",
-  "Docs",
-  "General"
+  "Git Basics",
+  "Pull Requests",
+  "Programming Docs",
+  "CLI Mastery",
+  "Bug Fixing"
 ];
 
 const DIFFICULTIES: ResourceDifficulty[] = ["beginner", "intermediate", "advanced"];
@@ -97,7 +94,7 @@ export default function SuggestResourceDialog({ open, onClose, onSubmit }: Props
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<ResourceCategory>("General");
+  const [category, setCategory] = useState<ResourceCategory>("Programming Docs");
   const [difficulty, setDifficulty] = useState<ResourceDifficulty>("beginner");
   const [type, setType] = useState<ResourceType>("article");
   const [language, setLanguage] = useState("");
@@ -127,7 +124,7 @@ export default function SuggestResourceDialog({ open, onClose, onSubmit }: Props
     setTitle("");
     setUrl("");
     setDescription("");
-    setCategory("General");
+    setCategory("Programming Docs");
     setDifficulty("beginner");
     setType("article");
     setLanguage("");

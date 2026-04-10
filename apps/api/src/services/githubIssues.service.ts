@@ -9,6 +9,7 @@ export type IngestedIssueDTO = {
   githubNumber: number;
   repoOwner: string;
   repoName: string;
+  repoLanguage: string | null;
 
   title: string;
   body: string;
@@ -30,16 +31,13 @@ export type IngestedIssueDTO = {
 function buildQuery(params: {
   owner: string;
   repo: string;
-  label: string;
   sinceISO?: string;
 }) {
-  // ✅ Must filter at GitHub API level
-  // is:open + label: + repo:
+  // Pull all open issues for the repo, then classify difficulty locally.
   const parts = [
     `repo:${params.owner}/${params.repo}`,
     `is:issue`,
-    `is:open`,
-    `label:"${params.label}"`
+    `is:open`
   ];
 
   // ✅ incremental sync
@@ -50,16 +48,34 @@ function buildQuery(params: {
   return parts.join(" ");
 }
 
-function mapToDTO(item: GitHubSearchItem, owner: string, repo: string): IngestedIssueDTO {
+function isBeginnerLabel(label: string): boolean {
+  const normalized = normalizeLabel(label);
+  return (
+    normalized === "good first issue" ||
+    normalized === "good-first-issue" ||
+    normalized === "help wanted" ||
+    normalized.includes("beginner") ||
+    normalized.includes("easy") ||
+    normalized.includes("starter") ||
+    normalized.includes("first-timer") ||
+    normalized.includes("documentation") ||
+    normalized.includes("docs") ||
+    normalized.includes("typo")
+  );
+}
+
+function mapToDTO(item: GitHubSearchItem, owner: string, repo: string, repoLanguage: string | null): IngestedIssueDTO {
   const labels = (item.labels || []).map((l: any) => normalizeLabel(l.name));
 
   const ghCreated = new Date(item.created_at);
   const ghUpdated = new Date(item.updated_at);
+  const beginnerFriendly = labels.some(isBeginnerLabel);
 
   return {
     githubNumber: item.number,
     repoOwner: owner,
     repoName: repo,
+    repoLanguage,
 
     title: item.title || "",
     body: item.body || "",
@@ -73,59 +89,62 @@ function mapToDTO(item: GitHubSearchItem, owner: string, repo: string): Ingested
     status: "open",
     openedAt: ghCreated,
 
-    beginnerFriendly: true,
+    beginnerFriendly,
     recentlyUpdated: true
   };
 }
 
-export async function fetchBeginnerOpenIssuesForRepo(params: {
+export async function fetchOpenIssuesForRepo(params: {
   owner: string;
   repo: string;
   sinceISO?: string;
+  repoLanguage?: string | null;
+  githubToken?: string;
 }) {
-  const token = process.env.GITHUB_SYSTEM_TOKEN;
+  const token = params.githubToken || process.env.GITHUB_SYSTEM_TOKEN;
   if (!token) {
-    throw new Error("GITHUB_TOKEN missing in .env");
+    throw new Error("GitHub token is not configured");
   }
 
   const all: IngestedIssueDTO[] = [];
   let fetchedCount = 0;
+  const maxPages = GITHUB.maxPagesPerRepo ?? GITHUB.maxPagesPerLabel;
 
-  for (const label of GITHUB.allowedLabels) {
-    for (let page = 1; page <= GITHUB.maxPagesPerLabel; page++) {
-      const q = buildQuery({
-        owner: params.owner,
-        repo: params.repo,
-        label,
-        sinceISO: params.sinceISO
-      });
+  for (let page = 1; page <= maxPages; page++) {
+    const q = buildQuery({
+      owner: params.owner,
+      repo: params.repo,
+      sinceISO: params.sinceISO
+    });
 
-      const res = await retryWithBackoff(() =>
-        axios.get(`${GITHUB.apiBaseUrl}/search/issues`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json"
-          },
-          params: {
-            q,
-            per_page: GITHUB.perPage,
-            page
-          }
-        })
-      );
+    const res = await retryWithBackoff(() =>
+      axios.get(`${GITHUB.apiBaseUrl}/search/issues`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json"
+        },
+        params: {
+          q,
+          per_page: GITHUB.perPage,
+          page
+        }
+      })
+    );
 
-      await handleRateLimitFromHeaders(res.headers);
+    await handleRateLimitFromHeaders(res.headers);
 
-      const items = res.data?.items || [];
-      fetchedCount += items.length;
+    const items = res.data?.items || [];
+    fetchedCount += items.length;
 
-      for (const it of items) {
-        all.push(mapToDTO(it, params.owner, params.repo));
-      }
-
-      if (items.length < GITHUB.perPage) break;
+    for (const it of items) {
+      all.push(mapToDTO(it, params.owner, params.repo, params.repoLanguage ?? null));
     }
+
+    if (items.length < GITHUB.perPage) break;
   }
 
   return { issues: all, fetchedCount };
 }
+
+// Backward-compatible alias used by older imports.
+export const fetchBeginnerOpenIssuesForRepo = fetchOpenIssuesForRepo;

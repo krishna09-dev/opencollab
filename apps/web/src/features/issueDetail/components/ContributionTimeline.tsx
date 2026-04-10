@@ -50,7 +50,7 @@ export default function ContributionTimeline({ issue, refreshingStatus, refreshS
               onClick={refreshStatusOnly}
               startIcon={refreshingStatus ? <CircularProgress size={14} color="inherit" /> : <MSym name="refresh" sx={{ fontSize: 16 }} />}
             >
-              Refresh Status
+              Refresh from GitHub
             </Button>
           </Stack>
         </AccordionDetails>

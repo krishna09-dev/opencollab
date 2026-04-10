@@ -24,6 +24,26 @@ export type GitHubPull = {
 
 type GitHubReviewState = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | null;
 
+export type GitHubSidebarReviewerStatus = "approved" | "changes_requested" | "pending";
+
+export type GitHubTimelineItem =
+  | { type: "commit"; sha: string; message: string; author: string; committedAt: string }
+  | { type: "comment"; id: string; login: string; body: string; createdAt: string; isReview: boolean }
+  | { type: "review"; id: string; login: string; state: string; body: string; submittedAt: string };
+
+export type GitHubPrSidebarData = {
+  reviewers: Array<{ id: string; name: string; status: GitHubSidebarReviewerStatus }>;
+  checks: Array<{ id: string; name: string; status: "success" | "running" | "failed"; durationLabel: string; progress: number }>;
+  filesChangedTotal: number;
+  filesChanged: Array<{ path: string; additions: number; deletions: number }>;
+  additions: number;
+  deletions: number;
+  timelineItems: GitHubTimelineItem[];
+  prHeadRef: string;
+  prBaseRef: string;
+  prLabels: string[];
+};
+
 /**
  * Parse a GitHub PR URL into owner, repo, and PR number
  * Supports formats:
@@ -307,4 +327,249 @@ export function computeStatusFromPR(pr: { state?: string | null; merged_at?: str
   if (pr.state === "closed") return "CLOSED" as const;
   if (pr.state === "open") return "PR_OPEN" as const;
   return "ACCEPTED" as const;
+}
+
+function formatDurationLabel(startedAt?: string | null, completedAt?: string | null): string {
+  if (!startedAt || !completedAt) return "Completed";
+
+  const start = new Date(startedAt).getTime();
+  const end = new Date(completedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return "Completed";
+
+  const totalSeconds = Math.floor((end - start) / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  if (secs === 0) return `${mins}m`;
+  return `${mins}m ${secs}s`;
+}
+
+function mapReviewStateToSidebarStatus(state: string | null | undefined): GitHubSidebarReviewerStatus {
+  if (state === "APPROVED") return "approved";
+  if (state === "CHANGES_REQUESTED") return "changes_requested";
+  return "pending";
+}
+
+function mapCheckRunToSidebarStatus(run: any): { status: "success" | "running" | "failed"; progress: number; durationLabel: string } {
+  const rawStatus = String(run?.status || "").toLowerCase();
+  const conclusion = String(run?.conclusion || "").toLowerCase();
+
+  if (rawStatus !== "completed") {
+    return {
+      status: "running",
+      progress: rawStatus === "in_progress" ? 65 : 20,
+      durationLabel: rawStatus === "queued" ? "Queued" : "Running..."
+    };
+  }
+
+  const succeeded = conclusion === "success" || conclusion === "neutral" || conclusion === "skipped";
+  return {
+    status: succeeded ? "success" : "failed",
+    progress: 100,
+    durationLabel: formatDurationLabel(run?.started_at ?? null, run?.completed_at ?? null)
+  };
+}
+
+async function fetchPrFilesChanged(params: {
+  githubToken: string;
+  owner: string;
+  repo: string;
+  prNumber: number;
+  maxPages?: number;
+}): Promise<Array<{ path: string; additions: number; deletions: number }>> {
+  const { githubToken, owner, repo, prNumber, maxPages = 3 } = params;
+  const files: Array<{ path: string; additions: number; deletions: number }> = [];
+
+  for (let page = 1; page <= maxPages; page++) {
+    const res = await axios.get(
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files`,
+      {
+        headers: {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: "application/vnd.github+json"
+        },
+        params: { per_page: 100, page }
+      }
+    );
+
+    const chunk: any[] = Array.isArray(res.data) ? res.data : [];
+    for (const file of chunk) {
+      files.push({
+        path: String(file?.filename || ""),
+        additions: Number(file?.additions ?? 0),
+        deletions: Number(file?.deletions ?? 0)
+      });
+    }
+
+    if (chunk.length < 100) break;
+  }
+
+  return files;
+}
+
+export async function fetchPrSidebarData(params: {
+  githubToken: string;
+  owner: string;
+  repo: string;
+  prNumber: number;
+}): Promise<GitHubPrSidebarData> {
+  const { githubToken, owner, repo, prNumber } = params;
+
+  const prRes = await axios.get(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
+    {
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github+json"
+      }
+    }
+  );
+
+  const pr = prRes.data;
+  const headSha = String(pr?.head?.sha || "").trim();
+  const prHeadRef = String(pr?.head?.ref || "");
+  const prBaseRef = String(pr?.base?.ref || "");
+  const prLabels: string[] = Array.isArray(pr?.labels) ? pr.labels.map((l: any) => String(l?.name || "")).filter(Boolean) : [];
+
+  const [reviewsRes, requestedReviewersRes, checksRes, filesChanged, commitsRes, issueCommentsRes] = await Promise.all([
+    axios.get(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/reviews`, {
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github+json"
+      },
+      params: { per_page: 100 }
+    }),
+    axios.get(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/requested_reviewers`, {
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github+json"
+      }
+    }),
+    headSha
+      ? axios.get(`https://api.github.com/repos/${owner}/${repo}/commits/${headSha}/check-runs`, {
+        headers: {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: "application/vnd.github+json"
+        },
+        params: { per_page: 100 }
+      }).catch(() => ({ data: { check_runs: [] } }))
+      : Promise.resolve({ data: { check_runs: [] } }),
+    fetchPrFilesChanged({ githubToken, owner, repo, prNumber }).catch(() => []),
+    axios.get(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/commits`, {
+      headers: { Authorization: `Bearer ${githubToken}`, Accept: "application/vnd.github+json" },
+      params: { per_page: 100 }
+    }).catch(() => ({ data: [] })),
+    axios.get(`https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
+      headers: { Authorization: `Bearer ${githubToken}`, Accept: "application/vnd.github+json" },
+      params: { per_page: 100 }
+    }).catch(() => ({ data: [] }))
+  ]);
+
+  const reviewersByLogin = new Map<string, { status: GitHubSidebarReviewerStatus; at: number }>();
+  const reviews: any[] = Array.isArray(reviewsRes.data) ? reviewsRes.data : [];
+
+  for (const review of reviews) {
+    const login = String(review?.user?.login || "").trim();
+    if (!login) continue;
+
+    const submittedAt = review?.submitted_at || review?.updated_at || review?.created_at;
+    const at = submittedAt ? new Date(submittedAt).getTime() : 0;
+    const status = mapReviewStateToSidebarStatus(String(review?.state || ""));
+
+    const existing = reviewersByLogin.get(login);
+    if (!existing || at >= existing.at) {
+      reviewersByLogin.set(login, { status, at });
+    }
+  }
+
+  const requestedUsers: any[] = Array.isArray(requestedReviewersRes.data?.users)
+    ? requestedReviewersRes.data.users
+    : [];
+
+  for (const user of requestedUsers) {
+    const login = String(user?.login || "").trim();
+    if (!login) continue;
+    if (!reviewersByLogin.has(login)) {
+      reviewersByLogin.set(login, { status: "pending", at: Number.MAX_SAFE_INTEGER });
+    }
+  }
+
+  const reviewers = Array.from(reviewersByLogin.entries())
+    .map(([name, value]) => ({
+      id: name,
+      name,
+      status: value.status
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const checkRuns: any[] = Array.isArray(checksRes.data?.check_runs) ? checksRes.data.check_runs : [];
+  const checks = checkRuns.map((run) => {
+    const mapped = mapCheckRunToSidebarStatus(run);
+    return {
+      id: String(run?.id ?? run?.name ?? Math.random()),
+      name: String(run?.name || "Unnamed check"),
+      status: mapped.status,
+      durationLabel: mapped.durationLabel,
+      progress: mapped.progress
+    };
+  });
+
+  // Build timeline items
+  const timelineItems: GitHubTimelineItem[] = [];
+
+  // Commits
+  const rawCommits: any[] = Array.isArray(commitsRes.data) ? commitsRes.data : [];
+  for (const c of rawCommits) {
+    timelineItems.push({
+      type: "commit",
+      sha: String(c?.sha || ""),
+      message: String(c?.commit?.message || ""),
+      author: String(c?.commit?.author?.name || c?.author?.login || ""),
+      committedAt: String(c?.commit?.author?.date || c?.commit?.committer?.date || "")
+    });
+  }
+
+  // Reviews (APPROVED / CHANGES_REQUESTED with optional body)
+  for (const review of reviews) {
+    const state = String(review?.state || "").toUpperCase();
+    if (state !== "APPROVED" && state !== "CHANGES_REQUESTED") continue;
+    const login = String(review?.user?.login || "").trim();
+    if (!login) continue;
+    timelineItems.push({
+      type: "review",
+      id: String(review?.id ?? Math.random()),
+      login,
+      state,
+      body: String(review?.body || "").trim(),
+      submittedAt: String(review?.submitted_at || "")
+    });
+  }
+
+  // Issue comments (regular PR timeline comments)
+  const rawIssueComments: any[] = Array.isArray(issueCommentsRes.data) ? issueCommentsRes.data : [];
+  for (const c of rawIssueComments) {
+    const login = String(c?.user?.login || "").trim();
+    if (!login) continue;
+    timelineItems.push({
+      type: "comment",
+      id: String(c?.id ?? Math.random()),
+      login,
+      body: String(c?.body || "").trim(),
+      createdAt: String(c?.created_at || ""),
+      isReview: false
+    });
+  }
+
+  return {
+    reviewers,
+    checks,
+    filesChangedTotal: Number(pr?.changed_files ?? filesChanged.length),
+    filesChanged,
+    additions: Number(pr?.additions ?? 0),
+    deletions: Number(pr?.deletions ?? 0),
+    timelineItems,
+    prHeadRef,
+    prBaseRef,
+    prLabels
+  };
 }

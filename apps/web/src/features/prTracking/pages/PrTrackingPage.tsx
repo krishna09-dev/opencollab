@@ -11,6 +11,7 @@ import {
   InputBase,
   Menu,
   MenuItem,
+  Pagination,
   Paper,
   Stack,
   TextField,
@@ -440,43 +441,46 @@ export default function PrTrackingPage() {
             <Box component="span" sx={{ color: "#fff", fontWeight: 500 }}>{sortedItems.length}</Box> PRs
           </Typography>
 
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Button
-              disabled={safePage === 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              sx={{ textTransform: "none", borderRadius: "14px", px: 2, color: "#a1a1aa", border: "1px solid #27272a", bgcolor: "#0b0f17" }}
-            >
-              Previous
-            </Button>
-
-            {Array.from({ length: Math.min(totalPages, 3) }, (_, index) => index + 1).map((num) => (
-              <Button
-                key={num}
-                onClick={() => setPage(num)}
-                sx={{
-                  minWidth: 36,
-                  width: 36,
-                  height: 36,
-                  borderRadius: "14px",
-                  p: 0,
-                  textTransform: "none",
-                  bgcolor: safePage === num ? "#19e66b" : "transparent",
-                  color: safePage === num ? "#000" : "#a1a1aa",
-                  fontWeight: safePage === num ? 700 : 400
-                }}
-              >
-                {num}
-              </Button>
-            ))}
-
-            <Button
-              disabled={safePage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              sx={{ textTransform: "none", borderRadius: "14px", px: 2, color: "#a1a1aa", border: "1px solid #27272a", bgcolor: "#0b0f17" }}
-            >
-              Next
-            </Button>
-          </Stack>
+          <Pagination
+            count={totalPages}
+            page={safePage}
+            onChange={(_event, value) => setPage(value)}
+            siblingCount={1}
+            boundaryCount={1}
+            showFirstButton
+            showLastButton
+            shape="rounded"
+            sx={{
+              "& .MuiPaginationItem-root": {
+                color: "#a1a1aa",
+                border: "1px solid #27272a",
+                bgcolor: "#0b0f17",
+                minWidth: 36,
+                height: 36,
+                borderRadius: "14px",
+                fontSize: 13,
+                fontWeight: 500
+              },
+              "& .MuiPaginationItem-root:hover": {
+                bgcolor: "#111827"
+              },
+              "& .MuiPaginationItem-root.Mui-selected": {
+                bgcolor: "#19e66b",
+                color: "#000",
+                borderColor: "#19e66b",
+                fontWeight: 700
+              },
+              "& .MuiPaginationItem-root.Mui-disabled": {
+                color: "#52525b",
+                borderColor: "#27272a",
+                opacity: 0.5
+              },
+              "& .MuiPaginationItem-ellipsis": {
+                border: "none",
+                bgcolor: "transparent"
+              }
+            }}
+          />
         </Stack>
 
         <Typography sx={{ mt: 4, color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
@@ -540,7 +544,7 @@ export default function PrTrackingPage() {
         </DialogTitle>
         <DialogContent>
           <Typography sx={{ color: "#a1a1aa", fontSize: 14, mb: 2.5 }}>
-            Enter the GitHub PR URL to track it. Only users involved in the PR (author, reviewers, commenters) will be able to see it.
+            Enter the GitHub PR URL to track it. Only PRs from repositories approved in OpenCollab can be added.
           </Typography>
 
           <TextField

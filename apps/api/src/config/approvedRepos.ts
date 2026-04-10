@@ -4,29 +4,10 @@ export type ApprovedRepoConfig = {
   isActive?: boolean;
 };
 
-// System config (Sprint 5 testing repos)
-export const APPROVED_REPOS: ApprovedRepoConfig[] = [
-  {
-    owner: "IAmTomShaw",
-    repo: "f1-race-replay",
-    isActive: true
-  },
-  {
-    owner: "slowlydev",
-    repo: "f1-dash",
-    isActive: true
-  }
-//   ,
-//   {
-//     owner: "lobehub",
-//     repo: "lobe-chat",
-//     isActive: true
-//   }
-];
+// Keep this list empty unless you intentionally want repos auto-seeded at startup.
+export const APPROVED_REPOS: ApprovedRepoConfig[] = [];
 
 export const toFullName = (owner: string, repo: string) => `${owner}/${repo}`;
 
-
-
-
-// https://github.com/lobehub/lobe-chat.git
+export const isSystemApprovedRepo = (fullName: string) =>
+  APPROVED_REPOS.some((repo) => toFullName(repo.owner, repo.repo) === fullName);

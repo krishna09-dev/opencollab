@@ -18,7 +18,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Divider,
   IconButton,
   InputBase,
   Stack,
@@ -29,6 +28,7 @@ import AppLayout from "../../../components/layout/AppLayout";
 import MSym from "../../resources/components/MSym";
 import { useGoodFirstIssues } from "../hooks/useGoodFirstIssues";
 import { useSavedIssues } from "../../../hooks/useSavedIssues";
+import { useRecentSearches } from "../../../hooks/useRecentSearches";
 import type { GoodFirstIssue, DifficultyLevel } from "../types";
 import { DIFFICULTY_CONFIGS } from "../types";
 
@@ -72,12 +72,10 @@ function timeAgo(dateStr: string): string {
 // Sidebar component for skill level selection
 function GoodFirstIssuesSidebar({
   userLevel,
-  onChangeLevel,
-  difficultyCounts
+  onChangeLevel
 }: {
   userLevel: DifficultyLevel;
   onChangeLevel: (level: DifficultyLevel) => void;
-  difficultyCounts: Record<DifficultyLevel, number>;
 }) {
   return (
     <>
@@ -140,70 +138,12 @@ function GoodFirstIssuesSidebar({
           );
         })}
       </Stack>
-
-      <Divider sx={{ borderColor: "#27272a", my: 2.5 }} />
-
-      <Typography
-        sx={{
-          color: "#a1a1aa",
-          fontWeight: 600,
-          fontSize: 12,
-          letterSpacing: 0.6,
-          textTransform: "uppercase",
-          px: 1,
-          mb: 1.5
-        }}
-      >
-        Issue Stats
-      </Typography>
-
-      <Stack spacing={0.8}>
-        {(Object.keys(DIFFICULTY_CONFIGS) as DifficultyLevel[]).map((level) => {
-          const config = DIFFICULTY_CONFIGS[level];
-          const count = difficultyCounts[level];
-
-          return (
-            <Stack
-              key={level}
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ px: 1 }}
-            >
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Box
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    bgcolor: config.color
-                  }}
-                />
-                <Typography sx={{ fontSize: 13, color: "#a1a1aa" }}>
-                  {config.label}
-                </Typography>
-              </Stack>
-              <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>
-                {count}
-              </Typography>
-            </Stack>
-          );
-        })}
-      </Stack>
-
-      <Divider sx={{ borderColor: "#27272a", my: 2.5 }} />
-
-      <Box sx={{ px: 1 }}>
-        <Typography sx={{ fontSize: 12, color: "#71717a", lineHeight: 1.5 }}>
-          We recommend issues based on your selected skill level. As you grow, update your level to see more challenging issues.
-        </Typography>
-      </Box>
     </>
   );
 }
 
 // Issue card component
-function GoodFirstIssueCard({ issue, isSaved, onToggleSave }: { issue: GoodFirstIssue; isSaved?: boolean; onToggleSave?: (id: string, meta?: { title: string; repoOwner: string; repoName: string }) => void }) {
+function GoodFirstIssueCard({ issue, isSaved, onToggleSave }: { issue: GoodFirstIssue; isSaved?: boolean; onToggleSave?: (id: string, meta?: { title: string; repoOwner: string; repoName: string; repoLanguage?: string | null; labels?: string[]; beginnerFriendly?: boolean }) => void }) {
   const navigate = useNavigate();
   const config = DIFFICULTY_CONFIGS[issue.difficulty];
   const isClaimed = issue.status === "claimed";
@@ -243,7 +183,26 @@ function GoodFirstIssueCard({ issue, isSaved, onToggleSave }: { issue: GoodFirst
 
           <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-              {(issue.labels || []).slice(0, 4).map((label) => {
+              {issue.repoLanguage && (() => {
+                const tc = getTagColor(issue.repoLanguage);
+                return (
+                  <Chip
+                    key={`lang-${issue.repoLanguage}`}
+                    label={issue.repoLanguage}
+                    sx={{
+                      height: 26,
+                      borderRadius: "8px",
+                      fontWeight: 500,
+                      color: tc.color,
+                      bgcolor: tc.bg,
+                      border: `1px solid ${tc.border}`,
+                      ".MuiChip-label": { px: 1.1, fontSize: 12 }
+                    }}
+                  />
+                );
+              })()}
+
+              {(issue.labels || []).slice(0, 3).map((label) => {
                 const tc = getTagColor(label);
                 return (
                   <Chip
@@ -285,7 +244,14 @@ function GoodFirstIssueCard({ issue, isSaved, onToggleSave }: { issue: GoodFirst
               <IconButton
                 onClick={(e) => {
                   e.stopPropagation();
-                  onToggleSave?.(issue._id, { title: issue.title, repoOwner: issue.repoOwner, repoName: issue.repoName });
+                  onToggleSave?.(issue._id, { 
+                    title: issue.title, 
+                    repoOwner: issue.repoOwner, 
+                    repoName: issue.repoName,
+                    repoLanguage: issue.repoLanguage,
+                    labels: issue.labels,
+                    beginnerFriendly: issue.beginnerFriendly
+                  });
                 }}
                 sx={{
                   color: isSaved ? "#19e66b" : "#a1a1aa",
@@ -362,6 +328,7 @@ function GoodFirstIssueCard({ issue, isSaved, onToggleSave }: { issue: GoodFirst
 // Main page component
 export default function GoodFirstIssuesPage() {
   const { isSaved, toggleSave } = useSavedIssues();
+  const { recentSearches, addSearch } = useRecentSearches();
   const {
     userLevel,
     changeUserLevel,
@@ -379,13 +346,20 @@ export default function GoodFirstIssuesPage() {
     goToPage,
     loadIssues,
     filterByDifficulty,
-    difficultyCounts
   } = useGoodFirstIssues();
 
   const [searchInput, setSearchInput] = useState("");
 
   const handleSearch = () => {
+    if (searchInput.trim()) {
+      addSearch(searchInput.trim());
+    }
     updateFilters({ search: searchInput, page: 1 });
+  };
+
+  const handleRecentSearchClick = (query: string) => {
+    setSearchInput(query);
+    updateFilters({ search: query, page: 1 });
   };
 
   const isLoading = viewMode === "recommended" ? recommendedLoading : loading;
@@ -399,7 +373,6 @@ export default function GoodFirstIssuesPage() {
         <GoodFirstIssuesSidebar
           userLevel={userLevel}
           onChangeLevel={changeUserLevel}
-          difficultyCounts={difficultyCounts}
         />
       }
     >
@@ -458,11 +431,17 @@ export default function GoodFirstIssuesPage() {
                 textTransform: "none",
                 color: config.color,
                 fontSize: 12,
-                fontWeight: 500
+                fontWeight: 500,
+                minWidth: 34,
+                px: 0.8,
+                borderRadius: "10px",
+                border: `1px solid ${config.borderColor}`,
+                bgcolor: "rgba(255,255,255,0.02)",
+                "&:hover": { bgcolor: config.bgColor }
               }}
-              endIcon={<MSym name="tune" sx={{ fontSize: 16 }} />}
+              aria-label="Change level"
             >
-              Change Level
+              <MSym name="tune" sx={{ fontSize: 16 }} />
             </Button>
           </Stack>
         </Box>
@@ -572,6 +551,37 @@ export default function GoodFirstIssuesPage() {
                 </Button>
               </Stack>
             </Stack>
+
+            {/* Recent Searches */}
+            {recentSearches.length > 0 && !searchInput && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                <Typography sx={{ fontSize: 12, color: "#71717a", mr: 0.5 }}>
+                  Recent:
+                </Typography>
+                {recentSearches.map((query, idx) => (
+                  <Chip
+                    key={idx}
+                    label={query}
+                    size="small"
+                    onClick={() => handleRecentSearchClick(query)}
+                    sx={{
+                      height: 24,
+                      borderRadius: "8px",
+                      bgcolor: "rgba(255,255,255,0.05)",
+                      border: "1px solid #27272a",
+                      color: "#a1a1aa",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      "&:hover": {
+                        bgcolor: "rgba(255,255,255,0.1)",
+                        borderColor: "#3f3f46"
+                      },
+                      ".MuiChip-label": { px: 1 }
+                    }}
+                  />
+                ))}
+              </Stack>
+            )}
 
             {/* Difficulty Filter Chips */}
             <Stack direction="row" spacing={1} sx={{ mb: 2.5 }}>

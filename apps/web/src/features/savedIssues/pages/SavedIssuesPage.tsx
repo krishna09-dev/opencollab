@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Adjust,
   Bookmark,
   BookmarkAdd,
   ChatBubbleOutline,
+  Close,
+  Code,
   Search
 } from "@mui/icons-material";
 import {
@@ -19,6 +21,7 @@ import {
 
 import AppLayout from "../../../components/layout/AppLayout";
 import { useSavedIssues } from "../../../hooks/useSavedIssues";
+import type { SavedIssueEntry } from "../../../hooks/useSavedIssues";
 
 const TAG_COLORS: Record<string, { color: string; bg: string; border: string }> = {
   bug: { color: "#f87171", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.2)" },
@@ -37,6 +40,141 @@ const DEFAULT_TAG_COLOR = { color: "#a1a1aa", bg: "rgba(161,161,170,0.1)", borde
 
 function getTagColor(label: string) {
   return TAG_COLORS[label.toLowerCase()] || DEFAULT_TAG_COLOR;
+}
+
+const filterChipSx = {
+  borderRadius: "14px",
+  height: 30,
+  bgcolor: "#0b0f17",
+  border: "1px solid #27272a",
+  color: "#a1a1aa",
+  fontSize: 12,
+  fontWeight: 500,
+  cursor: "pointer",
+  ".MuiChip-label": { px: 1.5 }
+};
+
+const activeFilterChipSx = {
+  ...filterChipSx,
+  bgcolor: "rgba(25,230,107,0.1)",
+  borderColor: "rgba(25,230,107,0.2)",
+  color: "#19e66b"
+};
+
+const DIFFICULTY_OPTIONS = [
+  { value: "beginner", label: "Beginner" },
+  { value: "intermediate", label: "Intermediate" },
+  { value: "advanced", label: "Advanced" }
+];
+
+function SavedIssuesSidebar({
+  languageOptions,
+  languageFilter,
+  difficultyFilter,
+  onToggleLanguage,
+  onToggleDifficulty,
+  onClearFilters
+}: {
+  languageOptions: string[];
+  languageFilter?: string;
+  difficultyFilter?: string;
+  onToggleLanguage: (lang: string) => void;
+  onToggleDifficulty: (difficulty: string) => void;
+  onClearFilters: () => void;
+}) {
+  const hasActiveFilters = Boolean(languageFilter || difficultyFilter);
+
+  return (
+    <>
+      <Stack direction="row" justifyContent="space-between" sx={{ mb: 1.5 }}>
+        <Typography
+          sx={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#a1a1aa",
+            letterSpacing: 0.6,
+            textTransform: "uppercase"
+          }}
+        >
+          Filters
+        </Typography>
+        {hasActiveFilters && (
+          <Typography
+            sx={{ fontSize: 10, color: "#19e66b", cursor: "pointer" }}
+            onClick={onClearFilters}
+          >
+            Clear all
+          </Typography>
+        )}
+      </Stack>
+
+      <Typography sx={{ fontSize: 12, color: "#fff", mb: 1 }}>Languages</Typography>
+      <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ mb: 2.5 }}>
+        {languageOptions.map((lang) => {
+          const isActive = languageFilter === lang;
+          return (
+            <Chip
+              key={lang}
+              icon={lang === "JavaScript" ? <Code sx={{ fontSize: "14px !important", color: isActive ? "#19e66b !important" : undefined }} /> : undefined}
+              label={lang}
+              onClick={() => onToggleLanguage(lang)}
+              sx={isActive ? activeFilterChipSx : filterChipSx}
+            />
+          );
+        })}
+        {languageOptions.length === 0 && (
+          <Typography sx={{ fontSize: 12, color: "#52525b", px: 0.5 }}>
+            No languages found.
+          </Typography>
+        )}
+      </Stack>
+
+      <Typography sx={{ fontSize: 12, color: "#fff", mb: 1 }}>Difficulty</Typography>
+      <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap">
+        {DIFFICULTY_OPTIONS.map(({ value, label }) => {
+          const isActive = difficultyFilter === value;
+          return (
+            <Chip
+              key={value}
+              label={label}
+              onClick={() => onToggleDifficulty(value)}
+              sx={isActive ? activeFilterChipSx : filterChipSx}
+            />
+          );
+        })}
+      </Stack>
+    </>
+  );
+}
+
+function isBeginnerLabel(l: string) {
+  const x = l.toLowerCase();
+  return (
+    x === "good first issue" ||
+    x === "good-first-issue" ||
+    x === "help wanted" ||
+    x.includes("beginner") ||
+    x.includes("easy") ||
+    x.includes("starter") ||
+    x.includes("first-timer") ||
+    x.includes("documentation") ||
+    x.includes("docs") ||
+    x.includes("typo")
+  );
+}
+
+function hasAdvancedLabel(l: string) {
+  return /advanced|expert|complex|senior|hard|difficult|architecture|breaking|major|refactor|performance|security/i.test(l);
+}
+
+function inferDifficulty(entry: SavedIssueEntry): "beginner" | "intermediate" | "advanced" {
+  const labels = (entry.labels || []).map((l) => String(l || "").toLowerCase());
+  const hasBeginnerSignals = entry.beginnerFriendly || labels.some(isBeginnerLabel);
+  const hasAdvancedSignals = labels.some(hasAdvancedLabel);
+
+  if (hasBeginnerSignals && !hasAdvancedSignals) return "beginner";
+  if (hasAdvancedSignals && !hasBeginnerSignals) return "advanced";
+  return "intermediate";
 }
 
 function timeAgo(ts: number): string {
@@ -83,7 +221,7 @@ function SavedIssueCard({
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace"
             }}
           >
-            {entry.repoOwner}/{entry.repoName} • saved {timeAgo(entry.savedAt)}
+            {entry.repoOwner}/{entry.repoName}{entry.repoLanguage ? ` • ${entry.repoLanguage}` : ""} • saved {timeAgo(entry.savedAt)}
           </Typography>
           <Typography
             sx={{ fontSize: 30 / 1.6, fontWeight: 600, lineHeight: "28px", mb: 0.8, color: "#fff" }}
@@ -93,19 +231,55 @@ function SavedIssueCard({
 
           <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-              {/* Repo chip as label */}
-              <Chip
-                label={`${entry.repoOwner}/${entry.repoName}`}
-                sx={{
-                  height: 26,
-                  borderRadius: "8px",
-                  fontWeight: 500,
-                  color: "#60a5fa",
-                  bgcolor: "rgba(96,165,250,0.1)",
-                  border: "1px solid rgba(96,165,250,0.2)",
-                  ".MuiChip-label": { px: 1.1, fontSize: 12 }
-                }}
-              />
+              {/* Show labels if available */}
+              {(entry.labels || []).slice(0, 3).map((label) => {
+                const tc = getTagColor(label);
+                return (
+                  <Chip
+                    key={label}
+                    label={label}
+                    sx={{
+                      height: 26,
+                      borderRadius: "8px",
+                      fontWeight: 500,
+                      color: tc.color,
+                      bgcolor: tc.bg,
+                      border: `1px solid ${tc.border}`,
+                      ".MuiChip-label": { px: 1.1, fontSize: 12 }
+                    }}
+                  />
+                );
+              })}
+              {/* Show beginner friendly chip if applicable */}
+              {entry.beginnerFriendly && !(entry.labels || []).some((l) => l.toLowerCase().includes("good first")) && (
+                <Chip
+                  label="Beginner Friendly"
+                  sx={{
+                    height: 26,
+                    borderRadius: "8px",
+                    fontWeight: 500,
+                    color: "#2dd4bf",
+                    bgcolor: "rgba(45,212,191,0.1)",
+                    border: "1px solid rgba(45,212,191,0.2)",
+                    ".MuiChip-label": { px: 1.1, fontSize: 12 }
+                  }}
+                />
+              )}
+              {/* Fallback to repo chip if no labels */}
+              {(!entry.labels || entry.labels.length === 0) && !entry.beginnerFriendly && (
+                <Chip
+                  label={`${entry.repoOwner}/${entry.repoName}`}
+                  sx={{
+                    height: 26,
+                    borderRadius: "8px",
+                    fontWeight: 500,
+                    color: "#60a5fa",
+                    bgcolor: "rgba(96,165,250,0.1)",
+                    border: "1px solid rgba(96,165,250,0.2)",
+                    ".MuiChip-label": { px: 1.1, fontSize: 12 }
+                  }}
+                />
+              )}
             </Stack>
             <Stack direction="row" spacing={2} alignItems="center">
               <Stack direction="row" spacing={0.7} alignItems="center">
@@ -159,19 +333,84 @@ function SavedIssueCard({
 export default function SavedIssuesPage() {
   const { saved, toggleSave } = useSavedIssues();
   const [search, setSearch] = useState("");
+  const [languageFilter, setLanguageFilter] = useState<string | undefined>();
+  const [difficultyFilter, setDifficultyFilter] = useState<string | undefined>();
+
+  const languageOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+
+    for (const entry of saved) {
+      const lang = String(entry.repoLanguage || "").trim();
+      if (!lang) continue;
+
+      const key = lang.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(lang);
+    }
+
+    return out.sort((a, b) => a.localeCompare(b));
+  }, [saved]);
+
+  const handleLanguageToggle = (lang: string) => {
+    setLanguageFilter((current) => (current === lang ? undefined : lang));
+  };
+
+  const handleDifficultyToggle = (difficulty: string) => {
+    setDifficultyFilter((current) => (current === difficulty ? undefined : difficulty));
+  };
+
+  const clearAllFilters = () => {
+    setLanguageFilter(undefined);
+    setDifficultyFilter(undefined);
+  };
 
   const filtered = saved.filter((e) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      e.title.toLowerCase().includes(q) ||
-      e.repoOwner.toLowerCase().includes(q) ||
-      e.repoName.toLowerCase().includes(q)
-    );
+    // Text search
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesText = (
+        e.title.toLowerCase().includes(q) ||
+        e.repoOwner.toLowerCase().includes(q) ||
+        e.repoName.toLowerCase().includes(q)
+      );
+      if (!matchesText) return false;
+    }
+
+    // Language filter
+    if (languageFilter) {
+      const lang = languageFilter.toLowerCase();
+      const repoLang = (e.repoLanguage || "").toLowerCase();
+      const labelsMatch = (e.labels || []).some(l => l.toLowerCase().includes(lang));
+      if (!repoLang.includes(lang) && !labelsMatch) return false;
+    }
+
+    // Difficulty filter
+    if (difficultyFilter) {
+      const difficulty = inferDifficulty(e);
+      if (difficulty !== difficultyFilter) return false;
+    }
+
+    return true;
   });
 
+  const hasActiveFilters = languageFilter || difficultyFilter;
+
   return (
-    <AppLayout activePage="saved">
+    <AppLayout
+      activePage="saved"
+      sidebarExtra={
+        <SavedIssuesSidebar
+          languageOptions={languageOptions}
+          languageFilter={languageFilter}
+          difficultyFilter={difficultyFilter}
+          onToggleLanguage={handleLanguageToggle}
+          onToggleDifficulty={handleDifficultyToggle}
+          onClearFilters={clearAllFilters}
+        />
+      }
+    >
       <Box sx={{ maxWidth: 1152, mx: "auto", px: 3, py: 5 }}>
         {/* Header */}
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
@@ -223,7 +462,7 @@ export default function SavedIssuesPage() {
           />
           {search && (
             <IconButton size="small" onClick={() => setSearch("")} sx={{ color: "#a1a1aa", p: 0.5 }}>
-              <Search sx={{ fontSize: 16 }} />
+              <Close sx={{ fontSize: 16 }} />
             </IconButton>
           )}
         </Box>
@@ -233,6 +472,7 @@ export default function SavedIssuesPage() {
           <Typography sx={{ fontSize: 13, color: "#a1a1aa" }}>
             {filtered.length} saved issue{filtered.length !== 1 ? "s" : ""}
             {search ? ` matching "${search}"` : ""}
+            {hasActiveFilters ? " (filtered)" : ""}
           </Typography>
         </Stack>
 
@@ -255,11 +495,11 @@ export default function SavedIssuesPage() {
               <BookmarkAdd sx={{ fontSize: 32, color: "#19e66b" }} />
             </Box>
             <Typography sx={{ color: "#a1a1aa", fontSize: 16, mb: 0.5 }}>
-              {search ? "No saved issues match your search." : "No saved issues yet."}
+              {(search || hasActiveFilters) ? "No saved issues match your filters." : "No saved issues yet."}
             </Typography>
             <Typography sx={{ color: "#52525b", fontSize: 14 }}>
-              {search
-                ? "Try a different search term."
+              {(search || hasActiveFilters)
+                ? "Try adjusting your search or filters."
                 : "Click the bookmark icon on any issue to save it here."}
             </Typography>
           </Box>
