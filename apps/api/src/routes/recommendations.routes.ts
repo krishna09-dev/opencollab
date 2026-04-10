@@ -6,7 +6,7 @@ import { Issue } from "../models/Issue";
 
 const router = Router();
 
-// ML Service URL (FastAPI running on port 8001)
+// ML Service URL (FastAPI running on Render in production, localhost in development)
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8001";
 const MIN_FALLBACK_SIMILARITY = 0.15;
 const MAX_FALLBACK_RESULTS = 10;
@@ -44,40 +44,42 @@ function computeFallbackRecommendations(
     ruby: ["ruby", "rails"],
   };
 
-  const userLangs = (userProfile.languages || []).map(l => l.toLowerCase());
-  const userTopics = (userProfile.topics || []).map(t => t.toLowerCase());
+  const userLangs = (userProfile.languages || []).map((l) => l.toLowerCase());
+  const userTopics = (userProfile.topics || []).map((t) => t.toLowerCase());
   const userDifficulty = (userProfile.difficulty || "beginner").toLowerCase();
 
-  // Build user keywords
   const userKeywords: string[] = [...userTopics];
-  userLangs.forEach(lang => {
+  userLangs.forEach((lang) => {
     userKeywords.push(lang);
     const variants = languageKeywords[lang];
     if (variants) userKeywords.push(...variants);
   });
 
-  // Score each issue
   const scored = issues.map((issue: any) => {
     let score = 0;
     const issueText = [
       issue.title,
       ...(issue.labels || []),
       ...(issue.requiredSkills || []),
-      issue.repoName
-    ].join(" ").toLowerCase();
+      issue.repoName,
+    ]
+      .join(" ")
+      .toLowerCase();
 
-    // Match user keywords
-    userKeywords.forEach(kw => {
+    userKeywords.forEach((kw) => {
       if (issueText.includes(kw)) score += 2;
     });
 
-    // Difficulty matching
-    const isBeginnerIssue = issue.beginnerFriendly ||
-      (issue.labels || []).some((l: string) =>
-        l.toLowerCase().includes("good first") ||
-        l.toLowerCase().includes("beginner") ||
-        l.toLowerCase().includes("easy")
-      );
+    const isBeginnerIssue =
+      issue.beginnerFriendly ||
+      (issue.labels || []).some((l: string) => {
+        const normalized = l.toLowerCase();
+        return (
+          normalized.includes("good first") ||
+          normalized.includes("beginner") ||
+          normalized.includes("easy")
+        );
+      });
 
     if (userDifficulty === "beginner" && isBeginnerIssue) {
       score += 5;
@@ -87,10 +89,9 @@ function computeFallbackRecommendations(
       score += 1;
     }
 
-    // Infer language from issue
     let language = "Unknown";
     for (const [lang, keywords] of Object.entries(languageKeywords)) {
-      if (keywords.some(kw => issueText.includes(kw))) {
+      if (keywords.some((kw) => issueText.includes(kw))) {
         language = lang.charAt(0).toUpperCase() + lang.slice(1);
         break;
       }
@@ -109,35 +110,34 @@ function computeFallbackRecommendations(
       claimed_by: issue.claimedByLogin || null,
       issue_status: issue.status || "open",
       _score: score,
-      _claimedRank: issue.status === "claimed" ? 1 : 0
+      _claimedRank: issue.status === "claimed" ? 1 : 0,
     };
   });
 
-  // Sort by claim rank first (open before claimed), then by score.
   scored.sort((a, b) => {
     if (a._claimedRank !== b._claimedRank) return a._claimedRank - b._claimedRank;
     return b._score - a._score;
   });
 
-  // Keep high-confidence matches when possible, otherwise show top-5 fallback.
   const aboveThreshold = scored.filter(
-    item => item.similarity_score >= MIN_FALLBACK_SIMILARITY
+    (item) => item.similarity_score >= MIN_FALLBACK_SIMILARITY
   );
-  const candidatePool = aboveThreshold.length >= FALLBACK_TOP_K
-    ? aboveThreshold
-    : scored.slice(0, FALLBACK_TOP_K);
 
-  // Diversify - max 5 per repo, cap at 10 recommendations
+  const candidatePool =
+    aboveThreshold.length >= FALLBACK_TOP_K ? aboveThreshold : scored.slice(0, FALLBACK_TOP_K);
+
   const maxResults = Math.min(topN, MAX_FALLBACK_RESULTS);
   const repoCount: Record<string, number> = {};
-  const diverse = candidatePool.filter(item => {
-    const count = repoCount[item.repo_name] || 0;
-    if (count >= 5) return false;
-    repoCount[item.repo_name] = count + 1;
-    return true;
-  }).slice(0, maxResults);
 
-  // Keep the open-first ordering and remove internal fields.
+  const diverse = candidatePool
+    .filter((item) => {
+      const count = repoCount[item.repo_name] || 0;
+      if (count >= 5) return false;
+      repoCount[item.repo_name] = count + 1;
+      return true;
+    })
+    .slice(0, maxResults);
+
   return sortClaimedToBottom(diverse).map(({ _score, _claimedRank, ...rest }) => rest);
 }
 
@@ -145,15 +145,13 @@ function computeFallbackRecommendations(
  * Fetch recommendable issues from the database and format for ML service.
  */
 async function fetchDatabaseIssues() {
-  // Fetch open + claimed issues from MongoDB
   const issues = await Issue.find({ status: { $in: RECOMMENDABLE_STATUSES } })
     .select(
       "_id repoOwner repoName title body summary labels requiredSkills beginnerFriendly status claimedByLogin"
     )
-    .limit(500) // Limit for performance
+    .limit(500)
     .lean();
 
-  // Format for ML service
   return issues.map((issue: any) => ({
     id: issue._id.toString(),
     repoOwner: issue.repoOwner || "",
@@ -165,21 +163,15 @@ async function fetchDatabaseIssues() {
     requiredSkills: issue.requiredSkills || [],
     beginnerFriendly: issue.beginnerFriendly || false,
     status: issue.status || "open",
-    claimedByLogin: issue.claimedByLogin || null
+    claimedByLogin: issue.claimedByLogin || null,
   }));
 }
 
-/**
- * GET /api/recommendations
- * Get personalized issue recommendations for the authenticated user.
- * Uses REAL issues from the MongoDB database, not CSV or seed data.
- */
 router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
   try {
     const { top_n = "10" } = req.query as Record<string, string | undefined>;
     const topN = Math.min(50, Math.max(1, parseInt(top_n, 10) || 10));
 
-    // Get user preferences
     const user = await User.findById(req.userId).select(
       "preferredLanguages experienceLevel areasOfInterest"
     );
@@ -188,7 +180,6 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Fetch REAL issues from database
     const databaseIssues = await fetchDatabaseIssues();
 
     if (databaseIssues.length === 0) {
@@ -196,25 +187,23 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
         recommendations: [],
         method: "no-issues",
         userProfile: {},
-        message: "No recommendable issues found in the database"
+        message: "No recommendable issues found in the database",
       });
     }
 
-    // Build user profile for ML service
     const userProfile = {
       languages: user.preferredLanguages || [],
       difficulty: user.experienceLevel || "beginner",
       topics: user.areasOfInterest || [],
-      keywords: []
+      keywords: [],
     };
 
-    // Call ML service with real database issues
     const mlResponse = await axios.post(
       `${ML_SERVICE_URL}/recommend`,
       {
         user: userProfile,
         issues: databaseIssues,
-        top_n: topN
+        top_n: topN,
       },
       { timeout: 30000 }
     );
@@ -224,18 +213,22 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
         issue.id,
         {
           issue_status: issue.status || "open",
-          claimed_by: issue.claimedByLogin || null
-        }
+          claimed_by: issue.claimedByLogin || null,
+        },
       ])
     );
 
     const recommendationsWithClaimState = sortClaimedToBottom(
       (mlResponse.data.recommendations || []).map((item: any) => {
-        const issueMeta = issueMetaById.get(item.issue_id) || { issue_status: "open", claimed_by: null };
+        const issueMeta = issueMetaById.get(item.issue_id) || {
+          issue_status: "open",
+          claimed_by: null,
+        };
+
         return {
           ...item,
           issue_status: issueMeta.issue_status,
-          claimed_by: issueMeta.claimed_by
+          claimed_by: issueMeta.claimed_by,
         };
       })
     );
@@ -243,16 +236,25 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
     return res.json({
       recommendations: recommendationsWithClaimState,
       method: mlResponse.data.method,
-      userProfile: userProfile,
-      totalIssuesAnalyzed: mlResponse.data.total_issues_analyzed
+      userProfile,
+      totalIssuesAnalyzed: mlResponse.data.total_issues_analyzed,
     });
   } catch (err: any) {
-    console.error("GET /api/recommendations error:", err?.message || err);
+    console.error("GET /api/recommendations error:", {
+      message: err?.message,
+      code: err?.code,
+      status: err?.response?.status,
+      data: err?.response?.data,
+    });
 
-    // If ML service is unavailable, use fallback recommendations
-    if (err?.code === "ECONNREFUSED" || err?.code === "ETIMEDOUT") {
+    const shouldUseFallback =
+      err?.code === "ECONNREFUSED" ||
+      err?.code === "ETIMEDOUT" ||
+      err?.code === "ECONNABORTED" ||
+      [404, 422, 429, 500, 502, 503, 504].includes(err?.response?.status);
+
+    if (shouldUseFallback) {
       try {
-        // Re-fetch user profile and issues for fallback
         const user = await User.findById(req.userId).select(
           "preferredLanguages experienceLevel areasOfInterest"
         );
@@ -263,7 +265,7 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
         const userProfile = {
           languages: user?.preferredLanguages || [],
           difficulty: user?.experienceLevel || "beginner",
-          topics: user?.areasOfInterest || []
+          topics: user?.areasOfInterest || [],
         };
 
         const recommendations = computeFallbackRecommendations(
@@ -277,7 +279,7 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
           method: "fallback-keyword",
           userProfile,
           totalIssuesAnalyzed: databaseIssues.length,
-          note: "Using fallback recommendations (ML service unavailable)"
+          note: "Using fallback recommendations (ML service unavailable)",
         });
       } catch (fallbackErr) {
         console.error("Fallback recommendations failed:", fallbackErr);
@@ -285,29 +287,25 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
           recommendations: [],
           method: "fallback-failed",
           userProfile: {},
-          error: "ML service unavailable and fallback failed"
+          error: "ML service unavailable and fallback failed",
         });
       }
     }
 
     return res.status(500).json({
       message: "Failed to get recommendations",
-      error: err?.message
+      error: err?.message,
+      mlStatus: err?.response?.status,
     });
   }
 });
 
-/**
- * GET /api/recommendations/health
- * Check ML service health.
- */
 router.get("/health", async (_req, res: Response) => {
   try {
     const mlResponse = await axios.get(`${ML_SERVICE_URL}/health`, {
-      timeout: 5000
+      timeout: 5000,
     });
 
-    // Also check database connection
     const issueCount = await Issue.countDocuments({ status: { $in: RECOMMENDABLE_STATUSES } });
 
     return res.json({
@@ -315,25 +313,20 @@ router.get("/health", async (_req, res: Response) => {
       mlService: mlResponse.data,
       database: {
         status: "connected",
-        openAndClaimedIssues: issueCount
-      }
+        openAndClaimedIssues: issueCount,
+      },
     });
   } catch (err: any) {
     return res.json({
       status: "degraded",
       mlService: {
         status: "unavailable",
-        error: err?.message
-      }
+        error: err?.message,
+      },
     });
   }
 });
 
-/**
- * POST /api/recommendations/custom
- * Get recommendations with a custom profile (for testing/preview).
- * Uses REAL database issues.
- */
 router.post("/custom", authRequired, async (req: AuthRequest, res: Response) => {
   try {
     const { languages, difficulty, topics, keywords, top_n } = req.body;
@@ -342,20 +335,18 @@ router.post("/custom", authRequired, async (req: AuthRequest, res: Response) => 
       languages: languages || [],
       difficulty: difficulty || "beginner",
       topics: topics || [],
-      keywords: keywords || []
+      keywords: keywords || [],
     };
 
     const topN = Math.min(50, Math.max(1, parseInt(top_n, 10) || 10));
-
-    // Fetch REAL issues from database
     const databaseIssues = await fetchDatabaseIssues();
 
     if (databaseIssues.length === 0) {
       return res.json({
         recommendations: [],
         method: "no-issues",
-        userProfile: userProfile,
-        message: "No recommendable issues found in the database"
+        userProfile,
+        message: "No recommendable issues found in the database",
       });
     }
 
@@ -364,7 +355,7 @@ router.post("/custom", authRequired, async (req: AuthRequest, res: Response) => 
       {
         user: userProfile,
         issues: databaseIssues,
-        top_n: topN
+        top_n: topN,
       },
       { timeout: 30000 }
     );
@@ -374,18 +365,22 @@ router.post("/custom", authRequired, async (req: AuthRequest, res: Response) => 
         issue.id,
         {
           issue_status: issue.status || "open",
-          claimed_by: issue.claimedByLogin || null
-        }
+          claimed_by: issue.claimedByLogin || null,
+        },
       ])
     );
 
     const recommendationsWithClaimState = sortClaimedToBottom(
       (mlResponse.data.recommendations || []).map((item: any) => {
-        const issueMeta = issueMetaById.get(item.issue_id) || { issue_status: "open", claimed_by: null };
+        const issueMeta = issueMetaById.get(item.issue_id) || {
+          issue_status: "open",
+          claimed_by: null,
+        };
+
         return {
           ...item,
           issue_status: issueMeta.issue_status,
-          claimed_by: issueMeta.claimed_by
+          claimed_by: issueMeta.claimed_by,
         };
       })
     );
@@ -393,24 +388,36 @@ router.post("/custom", authRequired, async (req: AuthRequest, res: Response) => 
     return res.json({
       recommendations: recommendationsWithClaimState,
       method: mlResponse.data.method,
-      userProfile: userProfile,
-      totalIssuesAnalyzed: mlResponse.data.total_issues_analyzed
+      userProfile,
+      totalIssuesAnalyzed: mlResponse.data.total_issues_analyzed,
     });
   } catch (err: any) {
-    console.error("POST /api/recommendations/custom error:", err?.message || err);
+    console.error("POST /api/recommendations/custom error:", {
+      message: err?.message,
+      code: err?.code,
+      status: err?.response?.status,
+      data: err?.response?.data,
+    });
 
-    if (err?.code === "ECONNREFUSED" || err?.code === "ETIMEDOUT") {
+    const shouldUseFallback =
+      err?.code === "ECONNREFUSED" ||
+      err?.code === "ETIMEDOUT" ||
+      err?.code === "ECONNABORTED" ||
+      [404, 422, 429, 500, 502, 503, 504].includes(err?.response?.status);
+
+    if (shouldUseFallback) {
       return res.json({
         recommendations: [],
         method: "fallback",
         userProfile: {},
-        error: "ML service unavailable"
+        error: "ML service unavailable or returned an invalid response",
       });
     }
 
     return res.status(500).json({
       message: "Failed to get recommendations",
-      error: err?.message
+      error: err?.message,
+      mlStatus: err?.response?.status,
     });
   }
 });
