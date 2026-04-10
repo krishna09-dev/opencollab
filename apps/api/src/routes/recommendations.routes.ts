@@ -149,7 +149,7 @@ async function fetchDatabaseIssues() {
     .select(
       "_id repoOwner repoName title body summary labels requiredSkills beginnerFriendly status claimedByLogin"
     )
-    .limit(500)
+    .limit(100)
     .lean();
 
   return issues.map((issue: any) => ({
