@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export interface IngestionRunDocument extends Document {
   startedAt: Date;
@@ -19,7 +20,7 @@ export interface IngestionRunDocument extends Document {
 const IngestionRunSchema = new Schema<IngestionRunDocument>(
   {
     startedAt: { type: Date, required: true },
-    finishedAt: { type: Date, default: null },
+    finishedAt: { type: Date, default: undefined },
 
     reposAttempted: { type: Number, default: 0 },
     reposSucceeded: { type: Number, default: 0 },
@@ -33,6 +34,8 @@ const IngestionRunSchema = new Schema<IngestionRunDocument>(
   },
   { timestamps: true }
 );
+
+IngestionRunSchema.plugin(cleanupOptionalFieldsPlugin);
 
 export const IngestionRun = mongoose.model<IngestionRunDocument>(
   "IngestionRun",

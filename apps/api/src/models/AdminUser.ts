@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export interface IAdminUser extends Document {
   username: string;
@@ -24,5 +25,7 @@ const AdminUserSchema = new Schema<IAdminUser>(
   },
   { timestamps: true }
 );
+
+AdminUserSchema.plugin(cleanupOptionalFieldsPlugin);
 
 export const AdminUser = mongoose.model<IAdminUser>("AdminUser", AdminUserSchema);

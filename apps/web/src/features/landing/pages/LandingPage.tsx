@@ -47,12 +47,6 @@ const FEATURE_CARDS = [
 
 const PARTNERS = ["GITHUB", "GITLAB", "VERCEL", "LINEAR", "STRIPE"] as const;
 
-const FOOTER_COLUMNS = [
-  { title: "PRODUCT", links: ["Product", "Changelog", "Status"] },
-  { title: "RESOURCES", links: ["Docs", "Twitter", "GitHub"] },
-  { title: "COMPANY", links: ["Privacy Policy", "Terms and Conditions", "Careers"] }
-] as const;
-
 export default function LandingPage() {
   const currentYear = new Date().getFullYear();
 
@@ -838,83 +832,78 @@ export default function LandingPage() {
         sx={{
           bgcolor: "#0e0e13",
           borderTop: "1px solid rgba(60,74,60,0.15)",
-          pt: 6,
-          pb: 7
+          py: { xs: 2.5, md: 3 }
         }}
       >
         <Container maxWidth="xl" sx={{ maxWidth: "1280px !important", px: { xs: 2.5, md: 4 } }}>
           <Box
             sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))", lg: "repeat(4,minmax(0,1fr))" },
-              gap: 4
+              display: "flex",
+              flexDirection: { xs: "column", sm: "row" },
+              alignItems: { xs: "flex-start", sm: "center" },
+              justifyContent: "space-between",
+              gap: { xs: 1.3, sm: 2 }
             }}
           >
-            <Box>
-              <Typography sx={{ color: "#fcfcfd", fontSize: 18, lineHeight: "28px", fontWeight: 600 }}>
-                OpenCollab
-              </Typography>
-              <Typography sx={{ mt: 1.4, color: "#a1a1aa", fontSize: 14, lineHeight: "22.75px" }}>
-                Copyright {currentYear} OpenCollab. All rights reserved.
+            <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1.1 }}>
+              <Box
+                sx={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "999px",
+                  border: "1px solid rgba(121,255,149,0.45)",
+                  bgcolor: "rgba(25,230,107,0.12)",
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0
+                }}
+              >
+                <MSym name="terminal" sx={{ fontSize: 13, color: "#79ff95" }} />
+              </Box>
+              <Typography sx={{ color: "#a1a1aa", fontSize: 13, lineHeight: "20px" }}>
+                OpenCollab Copyright {currentYear}. All rights reserved.
               </Typography>
             </Box>
 
-            {FOOTER_COLUMNS.map((column) => (
-              <Box key={column.title}>
-                <Typography
-                  sx={{
-                    color: "#79ff95",
-                    fontFamily: '"Space Grotesk", sans-serif',
-                    fontWeight: 500,
-                    fontSize: 12,
-                    lineHeight: "16px",
-                    letterSpacing: 1.2,
-                    textTransform: "uppercase",
-                    mb: 2.3
-                  }}
-                >
-                  {column.title}
-                </Typography>
-                {column.links.map((link) => {
-                  const to =
-                    link === "Terms and Conditions"
-                      ? "/terms"
-                      : link === "Privacy Policy"
-                        ? "/privacy"
-                        : undefined;
-
-                  if (!to) {
-                    return (
-                      <Typography
-                        key={link}
-                        sx={{ color: "#a1a1aa", fontSize: 14, lineHeight: "20px", mt: 1.4, cursor: "pointer" }}
-                      >
-                        {link}
-                      </Typography>
-                    );
-                  }
-
-                  return (
-                    <Typography
-                      key={link}
-                      component={RouterLink}
-                      to={to}
-                      sx={{
-                        color: "#a1a1aa",
-                        fontSize: 14,
-                        lineHeight: "20px",
-                        mt: 1.4,
-                        textDecoration: "none",
-                        display: "block",
-                        "&:hover": { color: "#e4e1e9" }
-                      }}
-                    >
-                      {link}
-                    </Typography>
-                  );
-                })}
-              </Box>
-            ))}
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                rowGap: 0.75,
+                columnGap: 1.6
+              }}
+            >
+              <Typography
+                component={RouterLink}
+                to="/privacy"
+                sx={{
+                  color: "#a1a1aa",
+                  fontSize: 13,
+                  lineHeight: "20px",
+                  textDecoration: "none",
+                  "&:hover": { color: "#e4e1e9" }
+                }}
+              >
+                Privacy Policy
+              </Typography>
+              <Typography sx={{ color: "rgba(161,161,170,0.45)", fontSize: 12, display: { xs: "none", sm: "block" } }}>
+                |
+              </Typography>
+              <Typography
+                component={RouterLink}
+                to="/terms"
+                sx={{
+                  color: "#a1a1aa",
+                  fontSize: 13,
+                  lineHeight: "20px",
+                  textDecoration: "none",
+                  "&:hover": { color: "#e4e1e9" }
+                }}
+              >
+                Terms and Conditions
+              </Typography>
+            </Box>
           </Box>
         </Container>
       </Box>

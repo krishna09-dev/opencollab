@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export type ResourceType = "docs" | "article" | "video" | "tool" | "repo";
 export type ResourceDifficulty = "beginner" | "intermediate" | "advanced";
@@ -70,7 +71,7 @@ const ResourceSchema = new Schema<IResource>(
     tags: { type: [String], default: [] },
     topics: { type: [String], default: [] },
 
-    language: { type: String, default: null },
+    language: { type: String, default: undefined },
 
     isFeatured: { type: Boolean, default: false },
     qualityScore: { type: Number, default: 70 },
@@ -78,15 +79,17 @@ const ResourceSchema = new Schema<IResource>(
     // ✅ NEW
     source: { type: String, enum: ["official", "community"], default: "official", index: true },
     status: { type: String, enum: ["approved", "pending", "rejected"], default: "approved", index: true },
-    submittedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
-    reviewedBy: { type: Schema.Types.ObjectId, default: null },
-    reviewedByModel: { type: String, enum: ["User", "AdminUser"], default: null },
-    reviewedByLogin: { type: String, default: null },
-    reviewedAt: { type: Date, default: null },
-    reviewNotes: { type: String, default: null }
+    submittedBy: { type: Schema.Types.ObjectId, ref: "User", default: undefined },
+    reviewedBy: { type: Schema.Types.ObjectId, default: undefined },
+    reviewedByModel: { type: String, enum: ["User", "AdminUser"], default: undefined },
+    reviewedByLogin: { type: String, default: undefined },
+    reviewedAt: { type: Date, default: undefined },
+    reviewNotes: { type: String, default: undefined }
   },
   { timestamps: true }
 );
+
+ResourceSchema.plugin(cleanupOptionalFieldsPlugin);
 
 // Text search index (keep your Atlas fix)
 ResourceSchema.index(

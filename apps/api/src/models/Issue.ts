@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export type IssueStatus = "open" | "claimed" | "closed";
 export type PrStatus = "NONE" | "PR_OPEN" | "MERGED" | "CLOSED";
@@ -151,7 +152,7 @@ const SuggestedResourceSchema = new Schema<SuggestedResource>(
   {
     title: { type: String, required: true },
     url: { type: String, required: true },
-    type: { type: String, default: null }
+    type: { type: String, default: undefined }
   },
   { _id: false }
 );
@@ -160,7 +161,7 @@ const IssueUpdateSchema = new Schema<IssueUpdateItem>(
   {
     id: { type: String, required: true },
     actorLogin: { type: String, required: true },
-    actorRole: { type: String, default: null },
+    actorRole: { type: String, default: undefined },
     body: { type: String, default: "" },
     createdAt: { type: Date, required: true }
   },
@@ -173,7 +174,7 @@ const TimelineItemSchema = new Schema<TimelineItem>(
     title: { type: String, required: true },
     status: { type: String, required: true },
     at: { type: Date, required: true },
-    meta: { type: String, default: null }
+    meta: { type: String, default: undefined }
   },
   { _id: false }
 );
@@ -217,7 +218,7 @@ const IssueSchema = new Schema<IssueDocument>(
     githubNumber: { type: Number, required: true },
     repoOwner: { type: String, required: true },
     repoName: { type: String, required: true },
-    repoLanguage: { type: String, default: null },
+    repoLanguage: { type: String, default: undefined },
     lastSyncedAt: { type: Date },
 
     title: { type: String, required: true },
@@ -227,15 +228,15 @@ const IssueSchema = new Schema<IssueDocument>(
 
     status: { type: String, enum: ["open", "claimed", "closed"], default: "open" },
 
-    claimedByUserId: { type: String, default: null },
-    claimedByLogin: { type: String, default: null },
+    claimedByUserId: { type: String, default: undefined },
+    claimedByLogin: { type: String, default: undefined },
 
     githubUrl: { type: String, required: true },
     githubCreatedAt: { type: Date, required: true },
     githubUpdatedAt: { type: Date, required: true },
 
     openedAt: { type: Date, required: true },
-    claimedAt: { type: Date, default: null },
+    claimedAt: { type: Date, default: undefined },
 
     requiredSkills: { type: [String], default: [] },
     expectedOutcome: { type: [String], default: [] },
@@ -246,19 +247,19 @@ const IssueSchema = new Schema<IssueDocument>(
     difficultyOverride: {
       type: String,
       enum: ["beginner", "intermediate", "advanced"],
-      default: null
+      default: undefined
     },
     activeMaintainer: { type: Boolean, default: false },
     recentlyUpdated: { type: Boolean, default: false },
 
     autoSetupCommands: { type: [SetupInstructionSchema], default: [] },
     projectSetupCommands: { type: [SetupInstructionSchema], default: [] },
-    maintainerSetupNotes: { type: String, default: null },
-    repositoryReadme: { type: String, default: null },
-    repositoryReadmeUrl: { type: String, default: null },
+    maintainerSetupNotes: { type: String, default: undefined },
+    repositoryReadme: { type: String, default: undefined },
+    repositoryReadmeUrl: { type: String, default: undefined },
 
     prStatus: { type: String, enum: ["NONE", "PR_OPEN", "MERGED", "CLOSED"], default: "NONE" },
-    lastPrMessage: { type: String, default: null },
+    lastPrMessage: { type: String, default: undefined },
 
     updates: { type: [IssueUpdateSchema], default: [] },
     contributionTimeline: { type: [TimelineItemSchema], default: [] },
@@ -269,8 +270,8 @@ const IssueSchema = new Schema<IssueDocument>(
     isVisible: { type: Boolean, default: false },
 
     // ML Scoring
-    mlScoring: { type: MlScoringSchema, default: null },
-    mlOverride: { type: MlOverrideSchema, default: null },
+    mlScoring: { type: MlScoringSchema, default: undefined },
+    mlOverride: { type: MlOverrideSchema, default: undefined },
 
     // Recommendation tracking
     recommendationClicks: { type: Number, default: 0 },
@@ -279,6 +280,8 @@ const IssueSchema = new Schema<IssueDocument>(
   },
   { timestamps: true }
 );
+
+IssueSchema.plugin(cleanupOptionalFieldsPlugin);
 
 // Unique key for upsert / dedupe
 IssueSchema.index({ repoOwner: 1, repoName: 1, githubNumber: 1 }, { unique: true });
