@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export interface SavedIssueEntry {
   issueId: string;
@@ -34,7 +35,7 @@ const SavedIssueSchema = new Schema({
   title: { type: String, required: true },
   repoOwner: { type: String, required: true },
   repoName: { type: String, required: true },
-  repoLanguage: { type: String, default: null },
+  repoLanguage: { type: String, default: undefined },
   labels: { type: [String], default: [] },
   beginnerFriendly: { type: Boolean, default: false },
   savedAt: { type: Date, default: Date.now }
@@ -62,5 +63,7 @@ const UserSchema = new Schema<IUser>(
     timestamps: true
   }
 );
+
+UserSchema.plugin(cleanupOptionalFieldsPlugin);
 
 export const User = mongoose.model<IUser>("User", UserSchema);

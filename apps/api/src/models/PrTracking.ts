@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export type PrStatus = "ACCEPTED" | "PR_OPEN" | "MERGED" | "CLOSED";
 export type SyncSource = "manual" | "worker";
@@ -72,28 +73,28 @@ const PrTrackingSchema = new Schema<IPrTracking>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     allowedUserIds: [{ type: Schema.Types.ObjectId, ref: "User", index: true }],
 
-    prUrlInput: { type: String, default: null },
+    prUrlInput: { type: String, default: undefined },
 
     repoFullName: { type: String, required: true, trim: true, index: true },
-    issueNumber: { type: Number, default: null, index: true },
+    issueNumber: { type: Number, default: undefined, index: true },
     issueTitle: { type: String, default: "" },
 
-    prNumber: { type: Number, default: null, index: true },
-    prTitle: { type: String, default: null },
-    prUrl: { type: String, default: null },
+    prNumber: { type: Number, default: undefined, index: true },
+    prTitle: { type: String, default: undefined },
+    prUrl: { type: String, default: undefined },
 
-    prState: { type: String, enum: ["open", "closed", null], default: null },
-    mergedAt: { type: Date, default: null },
-    closedAt: { type: Date, default: null },
-    prUpdatedAt: { type: Date, default: null },
+    prState: { type: String, enum: ["open", "closed", null], default: undefined },
+    mergedAt: { type: Date, default: undefined },
+    closedAt: { type: Date, default: undefined },
+    prUpdatedAt: { type: Date, default: undefined },
 
-    prBody: { type: String, default: null },
-    primaryLanguage: { type: String, default: null },
+    prBody: { type: String, default: undefined },
+    primaryLanguage: { type: String, default: undefined },
     requestedReviewersCount: { type: Number, default: 0 },
     reviewState: {
       type: String,
       enum: ["APPROVED", "CHANGES_REQUESTED", "COMMENTED", null],
-      default: null
+      default: undefined
     },
     commentsCount: { type: Number, default: 0 },
     reviewCommentsCount: { type: Number, default: 0 },
@@ -102,30 +103,32 @@ const PrTrackingSchema = new Schema<IPrTracking>(
     deletions: { type: Number, default: 0 },
     changedFiles: { type: Number, default: 0 },
 
-    createdAtGithub: { type: Date, default: null },
-    updatedAtGithub: { type: Date, default: null },
-    mergedAtGithub: { type: Date, default: null },
+    createdAtGithub: { type: Date, default: undefined },
+    updatedAtGithub: { type: Date, default: undefined },
+    mergedAtGithub: { type: Date, default: undefined },
 
-    prAuthor: { type: String, default: null },
+    prAuthor: { type: String, default: undefined },
     prParticipants: [{ type: String }],
 
-    issueId: { type: Schema.Types.ObjectId, ref: "Issue", default: null, index: true },
+    issueId: { type: Schema.Types.ObjectId, ref: "Issue", default: undefined, index: true },
 
     status: { type: String, enum: ["ACCEPTED", "PR_OPEN", "MERGED", "CLOSED"], default: "ACCEPTED", index: true },
 
     // Verification fields
     isVerified: { type: Boolean, default: false, index: true },
-    verifiedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
-    verifiedAt: { type: Date, default: null },
-    isValid: { type: Boolean, default: null },
-    verificationNote: { type: String, default: null },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: "User", default: undefined },
+    verifiedAt: { type: Date, default: undefined },
+    isValid: { type: Boolean, default: undefined },
+    verificationNote: { type: String, default: undefined },
 
-    lastSyncAt: { type: Date, default: null },
-    lastSystemSyncAt: { type: Date, default: null },
+    lastSyncAt: { type: Date, default: undefined },
+    lastSystemSyncAt: { type: Date, default: undefined },
     syncSource: { type: String, enum: ["manual", "worker"], default: "manual" }
   },
   { timestamps: true }
 );
+
+PrTrackingSchema.plugin(cleanupOptionalFieldsPlugin);
 
 // Unique constraint: one tracking record per user per repo+PR (either by issue or by PR number)
 PrTrackingSchema.index({ userId: 1, repoFullName: 1, prNumber: 1 }, { unique: true, sparse: true });

@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export type RepoRequestStatus = "pending" | "approved" | "rejected";
 export type IdentityModel = "User" | "AdminUser";
@@ -39,10 +40,10 @@ const RepoRequestSchema = new Schema<RepoRequestDocument>(
     fullNameNormalized: { type: String, required: true, index: true },
     repoOwner: { type: String, required: true },
     repoName: { type: String, required: true },
-    description: { type: String, default: null },
-    htmlUrl: { type: String, default: null },
-    language: { type: String, default: null },
-    requestNotes: { type: String, default: null },
+    description: { type: String, default: undefined },
+    htmlUrl: { type: String, default: undefined },
+    language: { type: String, default: undefined },
+    requestNotes: { type: String, default: undefined },
 
     requestedById: { type: Schema.Types.ObjectId, required: true, index: true },
     requestedByModel: { type: String, enum: ["User", "AdminUser"], required: true },
@@ -51,16 +52,18 @@ const RepoRequestSchema = new Schema<RepoRequestDocument>(
 
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
 
-    approvedRepoId: { type: Schema.Types.ObjectId, ref: "ApprovedRepo", default: null },
+    approvedRepoId: { type: Schema.Types.ObjectId, ref: "ApprovedRepo", default: undefined },
 
-    reviewedById: { type: Schema.Types.ObjectId, default: null },
-    reviewedByModel: { type: String, enum: ["User", "AdminUser"], default: null },
-    reviewedByLogin: { type: String, default: null },
-    reviewedAt: { type: Date, default: null },
-    reviewNotes: { type: String, default: null }
+    reviewedById: { type: Schema.Types.ObjectId, default: undefined },
+    reviewedByModel: { type: String, enum: ["User", "AdminUser"], default: undefined },
+    reviewedByLogin: { type: String, default: undefined },
+    reviewedAt: { type: Date, default: undefined },
+    reviewNotes: { type: String, default: undefined }
   },
   { timestamps: true }
 );
+
+RepoRequestSchema.plugin(cleanupOptionalFieldsPlugin);
 
 RepoRequestSchema.index(
   { fullNameNormalized: 1, requestedById: 1, status: 1 },

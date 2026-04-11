@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export type ReportTargetType = "issue" | "pr" | "user";
 export type ReportStatus = "pending" | "reviewing" | "resolved" | "dismissed";
@@ -62,7 +63,7 @@ const ReportSchema = new Schema<IReport>(
       required: true,
       index: true
     },
-    targetRef: { type: String, default: null },
+    targetRef: { type: String, default: undefined },
 
     reason: {
       type: String,
@@ -70,7 +71,7 @@ const ReportSchema = new Schema<IReport>(
       required: true
     },
     description: { type: String, required: true, maxlength: 2000 },
-    evidence: { type: String, default: null, maxlength: 1000 },
+    evidence: { type: String, default: undefined, maxlength: 1000 },
 
     status: {
       type: String,
@@ -84,14 +85,16 @@ const ReportSchema = new Schema<IReport>(
       default: "medium"
     },
 
-    reviewedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
-    reviewedByLogin: { type: String, default: null },
-    reviewedAt: { type: Date, default: null },
-    resolution: { type: String, default: null, maxlength: 1000 },
-    actionTaken: { type: String, default: null }
+    reviewedBy: { type: Schema.Types.ObjectId, ref: "User", default: undefined },
+    reviewedByLogin: { type: String, default: undefined },
+    reviewedAt: { type: Date, default: undefined },
+    resolution: { type: String, default: undefined, maxlength: 1000 },
+    actionTaken: { type: String, default: undefined }
   },
   { timestamps: true }
 );
+
+ReportSchema.plugin(cleanupOptionalFieldsPlugin);
 
 // Indexes for common queries
 ReportSchema.index({ status: 1, createdAt: -1 });

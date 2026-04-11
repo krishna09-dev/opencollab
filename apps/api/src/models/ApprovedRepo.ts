@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import { cleanupOptionalFieldsPlugin } from "./plugins/cleanupOptionalFields";
 
 export interface ApprovedRepoDocument extends Document {
   fullName: string; // owner/repo
@@ -22,20 +23,22 @@ const ApprovedRepoSchema = new Schema<ApprovedRepoDocument>(
     fullName: { type: String, required: true, unique: true },
     repoOwner: { type: String, required: true },
     repoName: { type: String, required: true },
-    description: { type: String, default: null },
-    htmlUrl: { type: String, default: null },
-    language: { type: String, default: null },
+    description: { type: String, default: undefined },
+    htmlUrl: { type: String, default: undefined },
+    language: { type: String, default: undefined },
 
     isActive: { type: Boolean, default: true },
 
-    lastSyncedAt: { type: Date, default: null },
-    lastRunAt: { type: Date, default: null },
+    lastSyncedAt: { type: Date, default: undefined },
+    lastRunAt: { type: Date, default: undefined },
 
-    lastError: { type: String, default: null },
-    lastErrorAt: { type: Date, default: null }
+    lastError: { type: String, default: undefined },
+    lastErrorAt: { type: Date, default: undefined }
   },
   { timestamps: true }
 );
+
+ApprovedRepoSchema.plugin(cleanupOptionalFieldsPlugin);
 
 ApprovedRepoSchema.index({ repoOwner: 1, repoName: 1 }, { unique: true });
 
