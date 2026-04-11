@@ -240,6 +240,7 @@ function HomeSidebarExtra({ onSearch, onFilterLanguage, onFilterDifficulty, acti
 
 function IssueCard({ issue, isSaved, onToggleSave }: { issue: IssueRow; isSaved?: boolean; onToggleSave?: (id: string, meta?: { title: string; repoOwner: string; repoName: string; repoLanguage?: string | null; labels?: string[]; beginnerFriendly?: boolean }) => void }) {
   const navigate = useNavigate();
+  const issueDetailNavState = { fromPath: "/feed", fromPage: "feed" as const, fromLabel: "feed" };
   const isClaimed = issue.status === "claimed";
   const isClosed = issue.status === "closed";
   const muted = isClaimed || isClosed;
@@ -262,7 +263,7 @@ function IssueCard({ issue, isSaved, onToggleSave }: { issue: IssueRow; isSaved?
         transition: "border-color 0.2s",
         "&:hover": { borderColor: "#3f3f46" }
       }}
-      onClick={() => navigate(`/issues/${issue._id}`)}
+      onClick={() => navigate(`/issues/${issue._id}`, { state: issueDetailNavState })}
     >
       <Stack direction="row" spacing={2} alignItems="flex-start">
         <Adjust sx={{ fontSize: 22, mt: 0.5, color: getStatusColor(issue.status) }} />
@@ -364,7 +365,7 @@ function IssueCard({ issue, isSaved, onToggleSave }: { issue: IssueRow; isSaved?
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/issues/${issue._id}`);
+              navigate(`/issues/${issue._id}`, { state: issueDetailNavState });
             }}
             sx={
               ctaPrimary
@@ -423,6 +424,7 @@ function IssueCard({ issue, isSaved, onToggleSave }: { issue: IssueRow; isSaved?
 
 function RecommendationCard({ recommendation, isSaved, onToggleSave }: { recommendation: RecommendationItem; isSaved?: boolean; onToggleSave?: (id: string, meta?: { title: string; repoOwner: string; repoName: string; repoLanguage?: string | null; labels?: string[]; beginnerFriendly?: boolean }) => void }) {
   const navigate = useNavigate();
+  const issueDetailNavState = { fromPath: "/feed", fromPage: "feed" as const, fromLabel: "AI recommendations" };
   const normalizedLanguage = recommendation.language?.trim();
   const displayLanguage = normalizedLanguage && normalizedLanguage.toLowerCase() !== "unknown" ? normalizedLanguage : null;
 
@@ -444,7 +446,7 @@ function RecommendationCard({ recommendation, isSaved, onToggleSave }: { recomme
         "&:hover": { borderColor: "#3f3f46" }
       }}
       onClick={() => {
-        navigate(`/issues/${recommendation.issue_id}`);
+        navigate(`/issues/${recommendation.issue_id}`, { state: issueDetailNavState });
       }}
     >
       {/* AI Match Score Badge */}
@@ -574,7 +576,7 @@ function RecommendationCard({ recommendation, isSaved, onToggleSave }: { recomme
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/issues/${recommendation.issue_id}`);
+              navigate(`/issues/${recommendation.issue_id}`, { state: issueDetailNavState });
             }}
             sx={{
               minHeight: 36,

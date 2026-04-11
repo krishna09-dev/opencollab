@@ -21,6 +21,7 @@ import {
   markAllNotificationsRead
 } from "../../features/issueDetail/api/issueDetailApi";
 import type { NotificationDto } from "../../features/issueDetail/types";
+import UserLegalFooter from "./UserLegalFooter";
 
 type CurrentUser = { login?: string; avatarUrl?: string; role?: string } | null;
 
@@ -111,7 +112,7 @@ export default function AppLayout({
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "#050509", color: "#fff" }}>
+    <Box sx={{ minHeight: "100vh", width: "100%", maxWidth: "100vw", overflowX: "hidden", bgcolor: "#050509", color: "#fff" }}>
       <GlobalStyles styles={{ body: { backgroundColor: "#050509" } }} />
 
       {/* ─── TOP BAR ─── */}
@@ -287,20 +288,17 @@ export default function AppLayout({
               <MSym name="person" sx={{ fontSize: 18, color: "#a1a1aa" }} />
               Your Profile
             </MenuItem>
-            {(currentUser?.role === "admin" || currentUser?.role === "moderator") && (
+            {currentUser?.role === "admin" && (
               <MenuItem
                 onClick={() => {
                   setProfileAnchor(null);
-                  navigate(currentUser?.role === "moderator" ? "/moderator" : "/admin");
+                  navigate("/admin");
                 }}
                 sx={{
                   fontSize: 14,
                   gap: 1.5,
                   "&:hover": {
-                    bgcolor:
-                      currentUser?.role === "moderator"
-                        ? "rgba(56,189,248,0.12)"
-                        : "rgba(251,146,60,0.1)"
+                    bgcolor: "rgba(251,146,60,0.1)"
                   }
                 }}
               >
@@ -308,10 +306,10 @@ export default function AppLayout({
                   name="admin_panel_settings"
                   sx={{
                     fontSize: 18,
-                    color: currentUser?.role === "moderator" ? "#38bdf8" : "#fb923c"
+                    color: "#fb923c"
                   }}
                 />
-                {currentUser?.role === "moderator" ? "Moderation Panel" : "Admin Panel"}
+                Admin Panel
               </MenuItem>
             )}
             <Divider sx={{ borderColor: "#27272a" }} />
@@ -399,11 +397,23 @@ export default function AppLayout({
           sx={{
             minHeight: "calc(100vh - 64px)",
             ml: { xs: 0, md: "280px" },
+            maxWidth: "100%",
+            overflowX: "clip",
             position: "relative",
-            zIndex: 1
+            zIndex: 1,
+            display: "flex",
+            flexDirection: "column"
           }}
         >
-          {children}
+          <Box sx={{ flex: 1 }}>
+            {children}
+          </Box>
+          <UserLegalFooter
+            sx={{ bgcolor: "#050509" }}
+            textColor="#71717a"
+            linkColor="#a1a1aa"
+            borderColor="rgba(39,39,42,0.85)"
+          />
         </Box>
       </Box>
     </Box>

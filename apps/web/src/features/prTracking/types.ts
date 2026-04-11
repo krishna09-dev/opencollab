@@ -111,6 +111,29 @@ export type PrTimelineEntry =
       isReview?: boolean;
     };
 
+export type LinkedIssueDetail = {
+  id?: string | null;
+  number: number;
+  title: string;
+  openedBy: string;
+  status?: "open" | "claimed" | "closed" | null;
+  prStatus?: "NONE" | "PR_OPEN" | "MERGED" | "CLOSED" | null;
+  summary?: string | null;
+  repoOwner?: string;
+  repoName?: string;
+  repoLanguage?: string | null;
+  difficulty?: "beginner" | "intermediate" | "advanced" | null;
+  beginnerFriendly?: boolean | null;
+  labels?: string[];
+  githubUrl?: string | null;
+  claimedByLogin?: string | null;
+  githubCreatedAt?: string | Date | null;
+  githubUpdatedAt?: string | Date | null;
+  requiredSkills?: string[];
+  expectedOutcome?: string[];
+  suggestedResources?: Array<{ title: string; url: string; type?: string | null }>;
+};
+
 export type PrDetailResponse = {
   id: string;
   title: string;
@@ -127,11 +150,7 @@ export type PrDetailResponse = {
     intro: string;
     changes: string[];
     note?: string | null;
-    linkedIssue?: {
-      number: number;
-      title: string;
-      openedBy: string;
-    } | null;
+    linkedIssue?: LinkedIssueDetail | null;
   };
   timeline: PrTimelineEntry[];
   sidebar: {
@@ -139,11 +158,7 @@ export type PrDetailResponse = {
     checks: Array<{ id: string; name: string; status: "success" | "running" | "failed"; durationLabel: string; progress: number }>;
     filesChangedTotal: number;
     filesChanged: Array<{ path: string; additions: number; deletions: number }>;
-    linkedIssue?: {
-      number: number;
-      title: string;
-      openedBy: string;
-    } | null;
+    linkedIssue?: LinkedIssueDetail | null;
     systemStatusLabel: string;
     additions?: number;
     deletions?: number;

@@ -8,7 +8,7 @@ import {
   Stack,
   Typography
 } from "@mui/material";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import type { ResourceCategory, ResourceDifficulty, ResourceFilterState, ResourceItem } from "../types";
 import MSym from "../components/MSym";
@@ -398,25 +398,6 @@ export default function ResourcesPage() {
             })}
           </Stack>
         )}
-
-        <Typography sx={{ mt: 4, color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
-          © 2023 OpenCollab Inc. ·{" "}
-          <Box
-            component={RouterLink}
-            to="/terms"
-            sx={{ color: "#a1a1aa", textDecoration: "none", "&:hover": { color: "#e5e7eb" } }}
-          >
-            Terms
-          </Box>{" "}
-          ·{" "}
-          <Box
-            component={RouterLink}
-            to="/privacy"
-            sx={{ color: "#a1a1aa", textDecoration: "none", "&:hover": { color: "#e5e7eb" } }}
-          >
-            Privacy
-          </Box>
-        </Typography>
       </Box>
     </AppLayout>
   );

@@ -170,7 +170,7 @@ function mapReviewerStatus(reviewState: string | null | undefined): "approved" |
   return "pending";
 }
 
-export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarData | null) {
+export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarData | null, linkedIssueDoc?: any | null) {
   const { owner, repo } = splitRepo(item.repoFullName);
   const prNumber = item.prNumber ?? null;
 
@@ -354,6 +354,60 @@ export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarDat
           ? "Closed"
           : "Open";
 
+  const linkedIssue = linkedIssueDoc
+    ? {
+        id: String(linkedIssueDoc._id),
+        number: linkedIssueDoc.githubNumber ?? item.issueNumber ?? null,
+        title: linkedIssueDoc.title || item.issueTitle || (item.issueNumber ? `Issue #${item.issueNumber}` : "Linked Issue"),
+        openedBy: linkedIssueDoc.claimedByLogin || liveAuthor || "unknown",
+        status: linkedIssueDoc.status ?? null,
+        prStatus: linkedIssueDoc.prStatus ?? null,
+        summary: linkedIssueDoc.summary || linkedIssueDoc.body || null,
+        repoOwner: linkedIssueDoc.repoOwner ?? owner,
+        repoName: linkedIssueDoc.repoName ?? repo,
+        repoLanguage: linkedIssueDoc.repoLanguage ?? null,
+        difficulty: linkedIssueDoc.difficultyOverride ?? null,
+        beginnerFriendly: Boolean(linkedIssueDoc.beginnerFriendly),
+        labels: Array.isArray(linkedIssueDoc.labels) ? linkedIssueDoc.labels : [],
+        githubUrl: linkedIssueDoc.githubUrl ?? null,
+        claimedByLogin: linkedIssueDoc.claimedByLogin ?? null,
+        githubCreatedAt: linkedIssueDoc.githubCreatedAt ? new Date(linkedIssueDoc.githubCreatedAt).toISOString() : null,
+        githubUpdatedAt: linkedIssueDoc.githubUpdatedAt ? new Date(linkedIssueDoc.githubUpdatedAt).toISOString() : null,
+        requiredSkills: Array.isArray(linkedIssueDoc.requiredSkills) ? linkedIssueDoc.requiredSkills : [],
+        expectedOutcome: Array.isArray(linkedIssueDoc.expectedOutcome) ? linkedIssueDoc.expectedOutcome : [],
+        suggestedResources: Array.isArray(linkedIssueDoc.suggestedResources)
+          ? linkedIssueDoc.suggestedResources.map((resource: any) => ({
+              title: resource?.title || "Resource",
+              url: resource?.url || "",
+              type: resource?.type || null
+            }))
+          : []
+      }
+    : item.issueNumber
+      ? {
+          id: item.issueId ? String(item.issueId) : null,
+          number: item.issueNumber,
+          title: item.issueTitle || `Issue #${item.issueNumber}`,
+          openedBy: liveAuthor || "unknown",
+          status: null,
+          prStatus: null,
+          summary: null,
+          repoOwner: owner,
+          repoName: repo,
+          repoLanguage: item.primaryLanguage ?? null,
+          difficulty: null,
+          beginnerFriendly: null,
+          labels: [],
+          githubUrl: null,
+          claimedByLogin: null,
+          githubCreatedAt: null,
+          githubUpdatedAt: null,
+          requiredSkills: [],
+          expectedOutcome: [],
+          suggestedResources: []
+        }
+      : null;
+
   return {
     id: String(item._id),
     title: liveTitle || item.issueTitle || (prNumber ? `Pull Request #${prNumber}` : "Pull Request"),
@@ -370,11 +424,7 @@ export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarDat
       intro: liveBody || item.issueTitle || "No description provided.",
       changes: [],
       note: null,
-      linkedIssue: item.issueNumber ? {
-        number: item.issueNumber,
-        title: item.issueTitle || `Issue #${item.issueNumber}`,
-        openedBy: liveAuthor || "unknown"
-      } : null
+      linkedIssue
     },
     timeline,
     sidebar: {
@@ -382,11 +432,7 @@ export function buildDetailPayload(item: any, githubSidebar?: GitHubPrSidebarDat
       checks: sidebarChecks,
       filesChangedTotal: sidebarFilesTotal,
       filesChanged: sidebarFiles,
-      linkedIssue: item.issueNumber ? {
-        number: item.issueNumber,
-        title: item.issueTitle || `Issue #${item.issueNumber}`,
-        openedBy: liveAuthor || "unknown"
-      } : null,
+      linkedIssue,
       systemStatusLabel: liveSystemStatus,
       additions: sidebarAdditions,
       deletions: sidebarDeletions
@@ -470,6 +516,19 @@ export class PrTrackingService {
     }).lean();
     if (!item) return null;
 
+    let linkedIssueDoc: any | null = null;
+    if (item.issueId) {
+      linkedIssueDoc = await Issue.findById(item.issueId).lean();
+    }
+    if (!linkedIssueDoc && item.issueNumber) {
+      const { owner, repo } = splitRepo(item.repoFullName);
+      linkedIssueDoc = await Issue.findOne({
+        repoOwner: { $regex: toExactCaseInsensitiveRegex(owner) },
+        repoName: { $regex: toExactCaseInsensitiveRegex(repo) },
+        githubNumber: item.issueNumber
+      }).lean();
+    }
+
     let githubSidebar: GitHubPrSidebarData | null = null;
 
     if (item.prNumber) {
@@ -492,7 +551,7 @@ export class PrTrackingService {
       }
     }
 
-    return buildDetailPayload(item, githubSidebar);
+    return buildDetailPayload(item, githubSidebar, linkedIssueDoc);
   }
 
   /**

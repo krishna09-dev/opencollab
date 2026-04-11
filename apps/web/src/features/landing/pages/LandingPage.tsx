@@ -5,13 +5,6 @@ import MSym from "../../resources/components/MSym";
 
 const MODERATOR_PREVIEW_IMAGE = "https://www.figma.com/api/mcp/asset/05aebb38-32ba-45dc-bb47-ec3354b1efe9";
 
-const NAV_LINKS = [
-  { label: "PLATFORM", href: "#platform", active: true },
-  { label: "RESOURCES", href: "#resources", active: false },
-  { label: "PRICING", href: "#pricing", active: false },
-  { label: "ENTERPRISE", href: "#enterprise", active: false }
-] as const;
-
 const PATHWAY_CARDS = [
   {
     icon: "rocket_launch",
@@ -57,10 +50,12 @@ const PARTNERS = ["GITHUB", "GITLAB", "VERCEL", "LINEAR", "STRIPE"] as const;
 const FOOTER_COLUMNS = [
   { title: "PRODUCT", links: ["Product", "Changelog", "Status"] },
   { title: "RESOURCES", links: ["Docs", "Twitter", "GitHub"] },
-  { title: "COMPANY", links: ["Privacy", "Terms", "Careers"] }
+  { title: "COMPANY", links: ["Privacy Policy", "Terms and Conditions", "Careers"] }
 ] as const;
 
 export default function LandingPage() {
+  const currentYear = new Date().getFullYear();
+
   return (
     <Box
       sx={{
@@ -123,33 +118,6 @@ export default function LandingPage() {
           >
             OpenCollab
           </Typography>
-
-          <Box sx={{ display: { xs: "none", md: "flex" }, alignItems: "center", gap: 3.5 }}>
-            {NAV_LINKS.map((item) => (
-              <Button
-                key={item.label}
-                component="a"
-                href={item.href}
-                disableRipple
-                sx={{
-                  minWidth: 0,
-                  p: 0,
-                  pb: item.active ? 0.6 : 0,
-                  borderBottom: item.active ? "1px solid #79ff95" : "1px solid transparent",
-                  borderRadius: 0,
-                  color: item.active ? "#79ff95" : "#a1a1aa",
-                  fontFamily: '"Inter", sans-serif',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  letterSpacing: -0.2,
-                  textTransform: "uppercase",
-                  "&:hover": { bgcolor: "transparent", color: "#79ff95" }
-                }}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </Box>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.8 }}>
             <Button
@@ -887,7 +855,7 @@ export default function LandingPage() {
                 OpenCollab
               </Typography>
               <Typography sx={{ mt: 1.4, color: "#a1a1aa", fontSize: 14, lineHeight: "22.75px" }}>
-                (c) 2024 OpenCollab Inc. Built for the obsidian pulse.
+                Copyright {currentYear} OpenCollab. All rights reserved.
               </Typography>
             </Box>
 
@@ -908,7 +876,12 @@ export default function LandingPage() {
                   {column.title}
                 </Typography>
                 {column.links.map((link) => {
-                  const to = link === "Terms" ? "/terms" : link === "Privacy" ? "/privacy" : undefined;
+                  const to =
+                    link === "Terms and Conditions"
+                      ? "/terms"
+                      : link === "Privacy Policy"
+                        ? "/privacy"
+                        : undefined;
 
                   if (!to) {
                     return (
@@ -932,7 +905,7 @@ export default function LandingPage() {
                         lineHeight: "20px",
                         mt: 1.4,
                         textDecoration: "none",
-                        display: "inline-block",
+                        display: "block",
                         "&:hover": { color: "#e4e1e9" }
                       }}
                     >

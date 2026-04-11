@@ -3,6 +3,7 @@ import { useOnboarding } from "../hooks/useOnboarding";
 import OnboardingBrand from "../components/OnboardingBrand";
 import OnboardingHero from "../components/OnboardingHero";
 import PreferencesForm from "../components/PreferencesForm";
+import UserLegalFooter from "../../../components/layout/UserLegalFooter";
 
 export default function OnboardingPage() {
   const {
@@ -20,6 +21,8 @@ export default function OnboardingPage() {
     <Box
       sx={{
         minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
         bgcolor: "#07070b",
         color: "#e5e7eb",
         position: "relative",
@@ -44,8 +47,10 @@ export default function OnboardingPage() {
       <OnboardingBrand />
 
       <Container
+        component="main"
         maxWidth={false}
         sx={{
+          flex: 1,
           position: "relative",
           zIndex: 1,
           px: { xs: 3, md: "120px" },
@@ -75,6 +80,12 @@ export default function OnboardingPage() {
           />
         </Box>
       </Container>
+
+      <UserLegalFooter
+        sx={{ bgcolor: "transparent", borderColor: "rgba(255,255,255,0.1)" }}
+        textColor="rgba(229,231,235,0.55)"
+        linkColor="rgba(229,231,235,0.75)"
+      />
     </Box>
   );
 }
