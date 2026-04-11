@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -65,6 +65,11 @@ function parseRelative(relative?: string): string {
   if (text.endsWith("w")) return `${text.slice(0, -1)} weeks ago`;
   return text;
 }
+
+const breakLongTextSx = {
+  overflowWrap: "anywhere",
+  wordBreak: "break-word"
+} as const;
 
 
 export default function PrTrackingPage() {
@@ -154,8 +159,13 @@ export default function PrTrackingPage() {
 
   return (
     <AppLayout activePage="pr-tracking">
-      <Box sx={{ maxWidth: 1152, mx: "auto", px: 3, py: 5 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+      <Box sx={{ maxWidth: 1152, width: "100%", minWidth: 0, mx: "auto", px: 3, py: 5, overflowX: "clip" }}>
+        <Stack
+          direction={{ xs: "column", lg: "row" }}
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={2}
+        >
           <Box>
             <Typography sx={{ fontSize: 42, lineHeight: "48px", fontWeight: 700, letterSpacing: -0.8 }}>
               My Pull Requests
@@ -164,7 +174,7 @@ export default function PrTrackingPage() {
               Track your contributions and monitor review progress.
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1.5}>
+          <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", rowGap: 1 }}>
             <Button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -348,11 +358,24 @@ export default function PrTrackingPage() {
               <Paper
                 key={item.id}
                 elevation={0}
-                sx={{ bgcolor: "#0b0f17", border: "1px solid #27272a", borderRadius: "20px", px: 3, py: 3, display: "flex", gap: 3, alignItems: "center" }}
+                sx={{
+                  bgcolor: "#0b0f17",
+                  border: "1px solid #27272a",
+                  borderRadius: "20px",
+                  px: 3,
+                  py: 3,
+                  display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
+                  gap: 3,
+                  alignItems: { xs: "stretch", sm: "center" },
+                  maxWidth: "100%",
+                  minWidth: 0,
+                  overflow: "hidden"
+                }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 0.5 }}>
-                    <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                  <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 0.5, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 12, color: "#a1a1aa", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", ...breakLongTextSx }}>
                       {item.repoFullName}
                     </Typography>
                     {item.prNumber ? (
@@ -371,28 +394,28 @@ export default function PrTrackingPage() {
                     </Paper>
                   </Stack>
 
-                  <Typography sx={{ mt: 1, fontSize: 31 / 1.55, fontWeight: 700, color: "#fff", lineHeight: "28px" }}>
+                  <Typography sx={{ mt: 1, fontSize: 31 / 1.55, fontWeight: 700, color: "#fff", lineHeight: "28px", ...breakLongTextSx }}>
                     {item.title}
                   </Typography>
 
-                  <Typography sx={{ mt: 1, color: "#a1a1aa", fontSize: 14, lineHeight: "22px" }}>
+                  <Typography sx={{ mt: 1, color: "#a1a1aa", fontSize: 14, lineHeight: "22px", ...breakLongTextSx }}>
                     {item.shortSummary || "No summary available for this pull request yet."}
                   </Typography>
 
-                  <Stack direction="row" spacing={2} sx={{ mt: 1.5, color: "#a1a1aa", alignItems: "center", flexWrap: "wrap", rowGap: 0.5 }}>
+                  <Stack direction="row" spacing={2} sx={{ mt: 1.5, color: "#a1a1aa", alignItems: "center", flexWrap: "wrap", rowGap: 0.5, minWidth: 0 }}>
                     <Stack direction="row" spacing={0.5} alignItems="center">
                       <MSym name="link" sx={{ fontSize: 14 }} />
                       <Typography sx={{ fontSize: 11, fontWeight: 500 }}>Fixes #{item.issueNumber}</Typography>
                     </Stack>
 
                     {item.primaryLanguage ? (
-                      <Stack direction="row" spacing={0.5} alignItems="center">
+                      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
                         <MSym name="code" sx={{ fontSize: 14 }} />
-                        <Typography sx={{ fontSize: 11, fontWeight: 500 }}>{item.primaryLanguage}</Typography>
+                        <Typography sx={{ fontSize: 11, fontWeight: 500, ...breakLongTextSx }}>{item.primaryLanguage}</Typography>
                       </Stack>
                     ) : null}
 
-                    <Stack direction="row" spacing={1.2} alignItems="center">
+                    <Stack direction="row" spacing={1.2} alignItems="center" sx={{ flexWrap: "wrap" }}>
                       <Stack direction="row" spacing={0.5} alignItems="center">
                         <MSym name="chat_bubble_outline" sx={{ fontSize: 14 }} />
                         <Typography sx={{ fontSize: 11, fontWeight: 500 }}>{item.commentsCount ?? 0}</Typography>
@@ -409,6 +432,7 @@ export default function PrTrackingPage() {
                   onClick={() => navigate(`/pr-tracking/${item.id}`)}
                   sx={{
                     height: 40,
+                    width: { xs: "100%", sm: "auto" },
                     borderRadius: "14px",
                     px: 3,
                     textTransform: "none",
@@ -416,6 +440,7 @@ export default function PrTrackingPage() {
                     bgcolor: "#19e66b",
                     color: "#000",
                     whiteSpace: "nowrap",
+                    flexShrink: 0,
                     boxShadow: "0 0 10px rgba(25,230,107,0.20)",
                     "&:hover": { bgcolor: "#22c55e" },
                     "&.Mui-disabled": { bgcolor: "rgba(25,230,107,0.25)", color: "rgba(0,0,0,0.45)" }
@@ -482,25 +507,6 @@ export default function PrTrackingPage() {
             }}
           />
         </Stack>
-
-        <Typography sx={{ mt: 4, color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
-          © 2023 OpenCollab Inc. ·{" "}
-          <Box
-            component={RouterLink}
-            to="/terms"
-            sx={{ color: "#a1a1aa", textDecoration: "none", "&:hover": { color: "#e5e7eb" } }}
-          >
-            Terms
-          </Box>{" "}
-          ·{" "}
-          <Box
-            component={RouterLink}
-            to="/privacy"
-            sx={{ color: "#a1a1aa", textDecoration: "none", "&:hover": { color: "#e5e7eb" } }}
-          >
-            Privacy
-          </Box>
-        </Typography>
       </Box>
 
       <Menu

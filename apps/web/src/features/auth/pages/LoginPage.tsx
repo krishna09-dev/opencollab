@@ -2,6 +2,7 @@ import { Box, GlobalStyles } from "@mui/material";
 import LoginBrand from "../components/LoginBrand";
 import LoginHero from "../components/LoginHero";
 import IssueFeedPreview from "../components/IssueFeedPreview";
+import UserLegalFooter from "../../../components/layout/UserLegalFooter";
 
 export default function LoginPage() {
   return (
@@ -9,6 +10,8 @@ export default function LoginPage() {
       sx={{
         minHeight: "100vh",
         width: "100%",
+        display: "flex",
+        flexDirection: "column",
         bgcolor: "#07070c",
         color: "#e5e7eb",
         fontFamily: '"Spline Sans", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
@@ -46,7 +49,7 @@ export default function LoginPage() {
         sx={{
           position: "relative",
           zIndex: 2,
-          minHeight: "calc(100vh - 90px)",
+          flex: 1,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -67,6 +70,12 @@ export default function LoginPage() {
           <IssueFeedPreview />
         </Box>
       </Box>
+
+      <UserLegalFooter
+        sx={{ bgcolor: "transparent", borderColor: "rgba(255,255,255,0.1)" }}
+        textColor="rgba(229,231,235,0.5)"
+        linkColor="rgba(229,231,235,0.75)"
+      />
     </Box>
   );
 }

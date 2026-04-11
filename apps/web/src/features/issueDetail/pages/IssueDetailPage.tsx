@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowBack } from "@mui/icons-material";
 import {
   Alert,
   Box,
@@ -11,9 +12,9 @@ import {
   Stack,
   Typography
 } from "@mui/material";
+import AppLayout from "../../../components/layout/AppLayout";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useIssueDetail } from "../hooks/useIssueDetail";
-import IssueDetailHeader from "../components/IssueDetailHeader";
 import IssueTitleSection from "../components/IssueTitleSection";
 import IssueBodyCard from "../components/IssueBodyCard";
 import SetupInstructions from "../components/SetupInstructions";
@@ -24,8 +25,18 @@ import SuggestedResourcesCard from "../components/SuggestedResourcesCard";
 import IssueActions from "../components/IssueActions";
 import PrTrackingCard from "../components/PrTrackingCard";
 
+type IssueDetailNavState = {
+  fromPath?: string;
+  fromPage?: "feed" | "resources" | "pr-tracking" | "good-first-issues" | "claimed-issues" | "saved" | "profile";
+  fromLabel?: string;
+};
+
 export default function IssueDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const navState = (location.state ?? null) as IssueDetailNavState | null;
+  const activePage = navState?.fromPage ?? "feed";
 
   const [toast, setToast] = useState<{ open: boolean; message: string; severity: "success" | "error" | "info" }>({
     open: false,
@@ -40,11 +51,7 @@ export default function IssueDetailPage() {
 
   const {
     currentUser,
-    loadingUser,
-    notifications,
-    unreadCount,
-    loadNotifications,
-    markNotificationsReadAll
+    loadingUser
   } = useCurrentUser();
 
   const {
@@ -66,7 +73,7 @@ export default function IssueDetailPage() {
     handleAbort,
     handleNotify,
     refreshStatusOnly
-  } = useIssueDetail(id, currentUser, showToast, loadNotifications);
+  } = useIssueDetail(id, currentUser, showToast, async () => {});
 
   const copyToClipboard = async (value: string) => {
     try {
@@ -85,111 +92,144 @@ export default function IssueDetailPage() {
 
   const pageLoading = loadingIssue || loadingUser;
 
+  const fallbackPathByPage: Record<NonNullable<IssueDetailNavState["fromPage"]>, string> = {
+    feed: "/feed",
+    resources: "/resources",
+    "pr-tracking": "/pr-tracking",
+    "good-first-issues": "/good-first-issues",
+    "claimed-issues": "/profile/claimed-issues",
+    saved: "/saved",
+    profile: "/profile"
+  };
+
+  const fallbackPath = navState?.fromPath || (navState?.fromPage ? fallbackPathByPage[navState.fromPage] : "/feed");
+  const backLabel = navState?.fromLabel || (navState?.fromPage === "saved" ? "saved issues" : navState?.fromPage === "claimed-issues" ? "claimed issues" : "feed");
+
+  const handleBack = () => {
+    const historyState = window.history.state as { idx?: number } | null;
+    if (typeof historyState?.idx === "number" && historyState.idx > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate(fallbackPath, { replace: true });
+  };
+
   return (
-    <Box sx={{ minHeight: "100vh", width: "100%", bgcolor: "#0a080c", position: "relative", color: "#e5e7eb", fontFamily: '"poppins", sans-serif' }}>
-      <GlobalStyles styles={{ body: { backgroundColor: "#0a080c" } }} />
+    <AppLayout activePage={activePage}>
+      <Box sx={{ minHeight: "100%", width: "100%", bgcolor: "#0a080c", position: "relative", color: "#e5e7eb", fontFamily: '"poppins", sans-serif' }}>
+        <GlobalStyles styles={{ body: { backgroundColor: "#050509" } }} />
 
-      {/* Background blobs */}
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          background: `
-            radial-gradient(900px 700px at 95% 2%, rgba(34,197,94,0.26), rgba(34,197,94,0) 60%),
-            radial-gradient(900px 700px at 15% 10%, rgba(255,255,255,0.06), rgba(255,255,255,0) 60%)
-          `
-        }}
-      />
+        {/* Background blobs */}
+        <Box
+          sx={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background: `
+              radial-gradient(900px 700px at 95% 2%, rgba(34,197,94,0.26), rgba(34,197,94,0) 60%),
+              radial-gradient(900px 700px at 15% 10%, rgba(255,255,255,0.06), rgba(255,255,255,0) 60%)
+            `
+          }}
+        />
 
-      <IssueDetailHeader
-        currentUser={currentUser}
-        unreadCount={unreadCount}
-        notifications={notifications}
-        loadNotifications={loadNotifications}
-        markNotificationsReadAll={markNotificationsReadAll}
-      />
+        <Container maxWidth={false} sx={{ maxWidth: 1440, py: 4, px: { xs: 2, md: 5, lg: 10 } }}>
+          <Button
+            onClick={handleBack}
+            startIcon={<ArrowBack sx={{ fontSize: 18 }} />}
+            variant="outlined"
+            sx={{
+              mb: 2,
+              borderColor: "rgba(255,255,255,0.20)",
+              color: "#fff",
+              borderRadius: 999,
+              textTransform: "none",
+              position: "relative",
+              zIndex: 1
+            }}
+          >
+            Back to {backLabel}
+          </Button>
 
-      <Container maxWidth={false} sx={{ maxWidth: 1440, py: 4, px: { xs: 2, md: 5, lg: 10 } }}>
-        {pageLoading ? (
-          <Box sx={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <CircularProgress />
-          </Box>
-        ) : error ? (
-          <Stack spacing={2} sx={{ minHeight: "50vh" }} alignItems="center" justifyContent="center">
-            <Typography sx={{ color: "#fca5a5", fontWeight: 600 }}>{error}</Typography>
-            <Button
-              onClick={loadIssue}
-              variant="outlined"
-              sx={{ borderColor: "rgba(255,255,255,0.20)", color: "#fff", borderRadius: 999, textTransform: "none" }}
-            >
-              Retry
-            </Button>
-          </Stack>
-        ) : !issue ? (
-          <Typography>Issue not found.</Typography>
-        ) : (
-          <Stack direction={{ xs: "column", lg: "row" }} spacing={4} sx={{ alignItems: "flex-start" }}>
-            {/* LEFT */}
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <IssueTitleSection
-                issue={issue}
-                statusP={statusP!}
-                diffP={diffP}
-                copyToClipboard={copyToClipboard}
-                shareUrl={buildIssueShareUrl(issue._id)}
-              />
-
-              <IssueBodyCard issue={issue} outcomes={outcomes} />
-
-              <SetupInstructions
-                issue={issue}
-                projectSetup={projectSetup}
-                copyToClipboard={copyToClipboard}
-              />
-
-              <UpdatesSection issue={issue} />
-
-              <ContributionTimeline
-                issue={issue}
-                refreshingStatus={refreshingStatus}
-                refreshStatusOnly={refreshStatusOnly}
-              />
+          {pageLoading ? (
+            <Box sx={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <CircularProgress />
             </Box>
+          ) : error ? (
+            <Stack spacing={2} sx={{ minHeight: "50vh" }} alignItems="center" justifyContent="center">
+              <Typography sx={{ color: "#fca5a5", fontWeight: 600 }}>{error}</Typography>
+              <Button
+                onClick={loadIssue}
+                variant="outlined"
+                sx={{ borderColor: "rgba(255,255,255,0.20)", color: "#fff", borderRadius: 999, textTransform: "none" }}
+              >
+                Retry
+              </Button>
+            </Stack>
+          ) : !issue ? (
+            <Typography>Issue not found.</Typography>
+          ) : (
+            <Stack direction={{ xs: "column", lg: "row" }} spacing={4} sx={{ alignItems: "flex-start" }}>
+              {/* LEFT */}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <IssueTitleSection
+                  issue={issue}
+                  statusP={statusP!}
+                  diffP={diffP}
+                  copyToClipboard={copyToClipboard}
+                  shareUrl={buildIssueShareUrl(issue._id)}
+                />
 
-            {/* RIGHT */}
-            <Box sx={{ width: { xs: "100%", lg: 276 }, flexShrink: 0, position: { xs: "static", lg: "sticky" }, top: 88 }}>
-              <IssueStatusCard
-                issue={issue}
-                isClaimedByMe={isClaimedByMe}
-                isClaimedByOther={isClaimedByOther}
-                isWatching={isWatching}
-                claiming={claiming}
-                aborting={aborting}
-                handleClaim={handleClaim}
-                handleAbort={handleAbort}
-                handleNotify={handleNotify}
-              />
+                <IssueBodyCard issue={issue} outcomes={outcomes} />
 
-              <PrTrackingCard issueId={issue._id} canSubmit={isClaimedByMe} showToast={showToast} onIssueUpdated={loadIssue} />
+                <SetupInstructions
+                  issue={issue}
+                  projectSetup={projectSetup}
+                  copyToClipboard={copyToClipboard}
+                />
 
-              <SuggestedResourcesCard />
+                <UpdatesSection issue={issue} />
 
-              <IssueActions
-                issue={issue}
-                copyToClipboard={copyToClipboard}
-                shareUrl={buildIssueShareUrl(issue._id)}
-              />
-            </Box>
-          </Stack>
-        )}
-      </Container>
+                <ContributionTimeline
+                  issue={issue}
+                  refreshingStatus={refreshingStatus}
+                  refreshStatusOnly={refreshStatusOnly}
+                />
+              </Box>
 
-      <Snackbar open={toast.open} autoHideDuration={3500} onClose={closeToast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
-        <Alert onClose={closeToast} severity={toast.severity} sx={{ width: "100%" }}>
-          {toast.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+              {/* RIGHT */}
+              <Box sx={{ width: { xs: "100%", lg: 276 }, flexShrink: 0, position: { xs: "static", lg: "sticky" }, top: 88 }}>
+                <IssueStatusCard
+                  issue={issue}
+                  isClaimedByMe={isClaimedByMe}
+                  isClaimedByOther={isClaimedByOther}
+                  isWatching={isWatching}
+                  claiming={claiming}
+                  aborting={aborting}
+                  handleClaim={handleClaim}
+                  handleAbort={handleAbort}
+                  handleNotify={handleNotify}
+                />
+
+                <PrTrackingCard issueId={issue._id} canSubmit={isClaimedByMe} showToast={showToast} onIssueUpdated={loadIssue} />
+
+                <SuggestedResourcesCard />
+
+                <IssueActions
+                  issue={issue}
+                  copyToClipboard={copyToClipboard}
+                  shareUrl={buildIssueShareUrl(issue._id)}
+                />
+              </Box>
+            </Stack>
+          )}
+        </Container>
+
+        <Snackbar open={toast.open} autoHideDuration={3500} onClose={closeToast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+          <Alert onClose={closeToast} severity={toast.severity} sx={{ width: "100%" }}>
+            {toast.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </AppLayout>
   );
 }

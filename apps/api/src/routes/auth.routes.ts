@@ -12,7 +12,12 @@ const router = Router();
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = (
+  process.env.FRONTEND_URL || "http://localhost:5173"
+)
+  .split(",")[0]
+  .trim()
+  .replace(/\/+$/, "");
 
 function moderationErrorRedirect(code: string) {
   return `${FRONTEND_URL}/moderation?error=${encodeURIComponent(code)}`;

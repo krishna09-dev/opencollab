@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Avatar,
   Box,
@@ -17,6 +17,11 @@ import MSym from "../../resources/components/MSym";
 import { fetchPrDetail, refreshSinglePr } from "../api/prTrackingApi";
 import AppLayout from "../../../components/layout/AppLayout";
 import type { PrDetailResponse, PrTimelineEntry } from "../types";
+
+const breakLongTextSx = {
+  overflowWrap: "anywhere",
+  wordBreak: "break-word"
+} as const;
 
 function statusChipSx(status: PrDetailResponse["status"]) {
   if (status === "CHANGES_REQUESTED") {
@@ -62,12 +67,19 @@ function TimelineItem({ item }: { item: PrTimelineEntry }) {
     return (
       <Stack spacing={1}>
         {item.commits.map((commit) => (
-          <Stack key={commit.sha} direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={1.25}>
+          <Stack
+            key={commit.sha}
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            spacing={0.75}
+            sx={{ minWidth: 0 }}
+          >
+            <Stack direction="row" spacing={1.25} sx={{ minWidth: 0, flex: 1 }}>
               <Typography sx={{ color: "#64748b", fontSize: 14, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
                 {commit.sha}
               </Typography>
-              <Typography sx={{ color: "#cbd5e1", fontSize: 14 }}>{commit.message}</Typography>
+              <Typography sx={{ color: "#cbd5e1", fontSize: 14, ...breakLongTextSx }}>{commit.message}</Typography>
             </Stack>
             <Typography sx={{ color: "#64748b", fontSize: 12 }}>{commit.atLabel}</Typography>
           </Stack>
@@ -98,10 +110,10 @@ function TimelineItem({ item }: { item: PrTimelineEntry }) {
         </Stack>
 
         <Box sx={{ px: 3, py: 3 }}>
-          <Typography sx={{ color: "#cbd5e1", fontSize: 16, lineHeight: "24px" }}>{item.summary}</Typography>
+          <Typography sx={{ color: "#cbd5e1", fontSize: 16, lineHeight: "24px", ...breakLongTextSx }}>{item.summary}</Typography>
           <Box sx={{ mt: 2, borderRadius: "16px", border: "1px solid #1e293b", bgcolor: "rgba(2,6,23,0.5)", px: 2, py: 2 }}>
-            <Typography sx={{ color: "#64748b", fontSize: 14, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>- {item.diffOld}</Typography>
-            <Typography sx={{ color: "#19e66b", fontSize: 14, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>+ {item.diffNew}</Typography>
+            <Typography sx={{ color: "#64748b", fontSize: 14, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", ...breakLongTextSx }}>- {item.diffOld}</Typography>
+            <Typography sx={{ color: "#19e66b", fontSize: 14, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", ...breakLongTextSx }}>+ {item.diffNew}</Typography>
           </Box>
         </Box>
       </Paper>
@@ -115,14 +127,14 @@ function TimelineItem({ item }: { item: PrTimelineEntry }) {
           <MSym name="subdirectory_arrow_left" sx={{ fontSize: 14, color: "#19e66b" }} />
           <Typography sx={{ color: "#19e66b", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.7 }}>{item.title}</Typography>
         </Stack>
-        <Typography sx={{ color: "#cbd5e1", fontSize: 14, lineHeight: "22.75px", mt: 1 }}>{item.body}</Typography>
+        <Typography sx={{ color: "#cbd5e1", fontSize: 14, lineHeight: "22.75px", mt: 1, ...breakLongTextSx }}>{item.body}</Typography>
       </Paper>
     );
   }
 
   if (item.type === "comment") {
     return (
-      <Paper elevation={0} sx={{ bgcolor: "#0b0f17", border: "1px solid #1e293b", borderRadius: "24px", overflow: "hidden" }}>
+      <Paper elevation={0} sx={{ bgcolor: "#0b0f17", border: "1px solid #1e293b", borderRadius: "24px", overflow: "hidden", minWidth: 0, maxWidth: "100%" }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 2, borderBottom: "1px solid #1e293b", bgcolor: "rgba(15,23,42,0.5)" }}>
           <Stack direction="row" spacing={1.5} alignItems="center">
             <Avatar sx={{ width: 24, height: 24, bgcolor: "#64748b" }}>{item.actor[0]?.toUpperCase()}</Avatar>
@@ -136,14 +148,16 @@ function TimelineItem({ item }: { item: PrTimelineEntry }) {
             </Box>
           )}
         </Stack>
-        <Box sx={{ px: 3, py: 3 }}>
-          <Typography sx={{ color: "#cbd5e1", fontSize: 14, lineHeight: "22px", whiteSpace: "pre-wrap" }}>{item.body}</Typography>
+        <Box sx={{ px: 3, py: 3, minWidth: 0, maxWidth: "100%" }}>
+          <Typography sx={{ color: "#cbd5e1", fontSize: 14, lineHeight: "22px", whiteSpace: "pre-wrap", ...breakLongTextSx }}>
+            {item.body}
+          </Typography>
         </Box>
       </Paper>
     );
   }
 
-  return <Typography sx={{ color: "#64748b", fontSize: 14 }}>{item.body}</Typography>;
+  return <Typography sx={{ color: "#64748b", fontSize: 14, ...breakLongTextSx }}>{item.body}</Typography>;
 }
 
 export default function PrTrackingDetailPage() {
@@ -201,6 +215,47 @@ export default function PrTrackingDetailPage() {
     }
   };
 
+  const handleViewAllChanges = () => {
+    if (!detail) return;
+    const owner = detail.owner?.trim();
+    const repo = detail.repo?.trim();
+    if (!owner || !repo) return;
+
+    const url =
+      typeof detail.number === "number" && Number.isFinite(detail.number)
+        ? `https://github.com/${owner}/${repo}/pull/${detail.number}/files`
+        : `https://github.com/${owner}/${repo}/pulls`;
+
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      window.location.assign(url);
+    }
+  };
+
+  const handleViewIssue = () => {
+    const linkedIssue = detail?.sidebar.linkedIssue;
+    if (!linkedIssue) return;
+
+    if (linkedIssue.id) {
+      navigate(`/issues/${linkedIssue.id}`);
+      return;
+    }
+
+    if (linkedIssue.githubUrl) {
+      const opened = window.open(linkedIssue.githubUrl, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        window.location.assign(linkedIssue.githubUrl);
+      }
+    }
+  };
+
+  const formatIssueDate = (value?: string | Date | null) => {
+    if (!value) return null;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
   const statusChip = useMemo(() => (detail ? statusChipSx(detail.status) : statusChipSx("OPEN")), [detail]);
 
   return (
@@ -221,16 +276,22 @@ export default function PrTrackingDetailPage() {
 
         {!loading && !error && detail && (
           <>
-            <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
-              <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.5}
+              alignItems={{ xs: "flex-start", md: "center" }}
+              justifyContent="space-between"
+              sx={{ mb: 3 }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
                 <Button
                   onClick={() => navigate("/pr-tracking")}
                   sx={{ minWidth: 32, width: 32, height: 32, borderRadius: "8px", p: 0, bgcolor: "#19e66b", color: "#050509" }}
                 >
                   <MSym name="chevron_left" sx={{ fontSize: 18 }} />
                 </Button>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography sx={{ color: "#fff", fontSize: 14 }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                  <Typography sx={{ color: "#fff", fontSize: 14, ...breakLongTextSx }}>
                     {detail.owner && detail.repo ? `${detail.owner}/${detail.repo}` : detail.repo || detail.owner || "--"}
                   </Typography>
                 </Stack>
@@ -275,17 +336,17 @@ export default function PrTrackingDetailPage() {
               </Paper>
             )}
 
-            <Stack direction="row" alignItems="flex-start" spacing={2}>
-              <Box>
-                <Typography sx={{ fontSize: 42 / 1.4, fontWeight: 700 }}>
+            <Stack direction="row" alignItems="flex-start" spacing={2} sx={{ minWidth: 0 }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 42 / 1.4, fontWeight: 700, ...breakLongTextSx }}>
                   {detail.title} <Box component="span" sx={{ color: "#64748b", fontWeight: 400 }}>#{detail.number}</Box>
                 </Typography>
 
-                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 1 }}>
+                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 1, flexWrap: "wrap", rowGap: 1, minWidth: 0 }}>
                   <Box sx={{ borderRadius: 999, px: 1.4, py: 0.55, bgcolor: statusChip.bg, border: `1px solid ${statusChip.bd}`, color: statusChip.color, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>
                     {statusChip.text}
                   </Box>
-                  <Box sx={{ borderRadius: "6px", px: 1.4, py: 0.5, bgcolor: "rgba(30,41,59,0.5)", border: "1px solid #334155", display: "flex", alignItems: "center", gap: 1, color: "#94a3b8", fontSize: 14, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                  <Box sx={{ borderRadius: "6px", px: 1.4, py: 0.5, bgcolor: "rgba(30,41,59,0.5)", border: "1px solid #334155", display: "flex", alignItems: "center", gap: 1, color: "#94a3b8", fontSize: 14, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", maxWidth: "100%", ...breakLongTextSx }}>
                     {detail.sourceBranch}
                     <MSym name="arrow_right_alt" sx={{ fontSize: 14 }} />
                     <Box component="span" sx={{ color: "#19e66b" }}>{detail.targetBranch}</Box>
@@ -314,16 +375,16 @@ export default function PrTrackingDetailPage() {
                   </Stack>
 
                   <Box sx={{ px: 3, py: 3 }}>
-                    <Typography sx={{ color: "#cbd5e1", fontSize: 16, lineHeight: "24px" }}>{detail.overview.intro}</Typography>
+                    <Typography sx={{ color: "#cbd5e1", fontSize: 16, lineHeight: "24px", ...breakLongTextSx }}>{detail.overview.intro}</Typography>
                     <Stack component="ul" sx={{ mt: 2, mb: 0, pl: 2, color: "#cbd5e1", gap: 0.75 }}>
                       {detail.overview.changes.map((change) => (
-                        <Typography component="li" key={change} sx={{ fontSize: 16, lineHeight: "24px" }}>{change}</Typography>
+                        <Typography component="li" key={change} sx={{ fontSize: 16, lineHeight: "24px", ...breakLongTextSx }}>{change}</Typography>
                       ))}
                     </Stack>
 
                     {detail.overview.note && (
                       <Box sx={{ mt: 2, height: 50, borderRadius: "8px", bgcolor: "rgba(30,41,59,0.5)", borderLeft: "4px solid #19e66b", px: 1.5, display: "flex", alignItems: "center" }}>
-                        <Typography sx={{ color: "#94a3b8", fontSize: 16, lineHeight: "24px" }}>
+                        <Typography sx={{ color: "#94a3b8", fontSize: 16, lineHeight: "24px", ...breakLongTextSx }}>
                           <Box component="span" sx={{ fontWeight: 700 }}>Note:</Box> {detail.overview.note}
                         </Typography>
                       </Box>
@@ -332,7 +393,7 @@ export default function PrTrackingDetailPage() {
                     {detail.overview.linkedIssue ? (
                       <>
                         <Divider sx={{ borderColor: "#1e293b", my: 2 }} />
-                        <Typography sx={{ color: "#94a3b8", fontSize: 14 }}>
+                        <Typography sx={{ color: "#94a3b8", fontSize: 14, ...breakLongTextSx }}>
                           <MSym name="link" sx={{ fontSize: 12, mr: 0.8, verticalAlign: "middle" }} />
                           Fixes <Box component="span" sx={{ color: "#19e66b" }}>#{detail.overview.linkedIssue.number}</Box>: "{detail.overview.linkedIssue.title}"
                         </Typography>
@@ -410,10 +471,164 @@ export default function PrTrackingDetailPage() {
                   <Typography sx={{ color: "#94a3b8", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.4 }}>Linked Issues</Typography>
                   {detail.sidebar.linkedIssue ? (
                     <Box sx={{ mt: 2, borderRadius: "16px", border: "1px solid #1e293b", bgcolor: "rgba(15,23,42,0.5)", px: 1.6, py: 1.5 }}>
-                      <Typography sx={{ color: "#e2e8f0", fontSize: 14, fontWeight: 500 }}>{detail.sidebar.linkedIssue.title}</Typography>
-                      <Typography sx={{ color: "#64748b", fontSize: 11, mt: 0.5 }}>
+                      <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="flex-start" sx={{ minWidth: 0 }}>
+                        <Typography sx={{ color: "#e2e8f0", fontSize: 14, fontWeight: 600, ...breakLongTextSx }}>
+                          {detail.sidebar.linkedIssue.title}
+                        </Typography>
+                        {detail.sidebar.linkedIssue.status ? (
+                          <Box
+                            sx={{
+                              borderRadius: "999px",
+                              px: 1,
+                              py: 0.25,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              textTransform: "uppercase",
+                              border: "1px solid #334155",
+                              color: "#93c5fd",
+                              bgcolor: "rgba(59,130,246,0.12)",
+                              flexShrink: 0
+                            }}
+                          >
+                            {detail.sidebar.linkedIssue.status}
+                          </Box>
+                        ) : null}
+                      </Stack>
+
+                      <Typography sx={{ color: "#64748b", fontSize: 11, mt: 0.5, ...breakLongTextSx }}>
                         #{detail.sidebar.linkedIssue.number} · Opened by {detail.sidebar.linkedIssue.openedBy}
                       </Typography>
+
+                      {(detail.sidebar.linkedIssue.repoOwner || detail.sidebar.linkedIssue.repoName || detail.sidebar.linkedIssue.repoLanguage) ? (
+                        <Typography sx={{ color: "#64748b", fontSize: 11, mt: 0.5, ...breakLongTextSx }}>
+                          Repo: {detail.sidebar.linkedIssue.repoOwner || "-"}/{detail.sidebar.linkedIssue.repoName || "-"}
+                          {detail.sidebar.linkedIssue.repoLanguage ? ` · ${detail.sidebar.linkedIssue.repoLanguage}` : ""}
+                        </Typography>
+                      ) : null}
+
+                      {detail.sidebar.linkedIssue.summary ? (
+                        <Typography sx={{ color: "#cbd5e1", fontSize: 12, mt: 1, lineHeight: "20px", ...breakLongTextSx }}>
+                          {detail.sidebar.linkedIssue.summary}
+                        </Typography>
+                      ) : null}
+
+                      <Stack direction="row" spacing={0.75} sx={{ mt: 1.1, flexWrap: "wrap", rowGap: 0.75 }}>
+                        {detail.sidebar.linkedIssue.prStatus ? (
+                          <Box sx={{ borderRadius: "999px", px: 1, py: 0.25, fontSize: 10, fontWeight: 700, color: "#19e66b", border: "1px solid rgba(25,230,107,0.35)", bgcolor: "rgba(25,230,107,0.12)" }}>
+                            PR {detail.sidebar.linkedIssue.prStatus}
+                          </Box>
+                        ) : null}
+
+                        {detail.sidebar.linkedIssue.difficulty ? (
+                          <Box sx={{ borderRadius: "999px", px: 1, py: 0.25, fontSize: 10, fontWeight: 700, color: "#fbbf24", border: "1px solid rgba(251,191,36,0.35)", bgcolor: "rgba(251,191,36,0.12)", textTransform: "capitalize" }}>
+                            {detail.sidebar.linkedIssue.difficulty}
+                          </Box>
+                        ) : null}
+
+                        {detail.sidebar.linkedIssue.beginnerFriendly ? (
+                          <Box sx={{ borderRadius: "999px", px: 1, py: 0.25, fontSize: 10, fontWeight: 700, color: "#93c5fd", border: "1px solid rgba(147,197,253,0.35)", bgcolor: "rgba(147,197,253,0.12)" }}>
+                            Beginner Friendly
+                          </Box>
+                        ) : null}
+                      </Stack>
+
+                      {detail.sidebar.linkedIssue.labels && detail.sidebar.linkedIssue.labels.length > 0 ? (
+                        <Stack direction="row" spacing={0.75} sx={{ mt: 1.1, flexWrap: "wrap", rowGap: 0.75 }}>
+                          {detail.sidebar.linkedIssue.labels.map((label) => (
+                            <Box
+                              key={label}
+                              sx={{
+                                borderRadius: "999px",
+                                px: 1,
+                                py: 0.25,
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: "#a5b4fc",
+                                border: "1px solid rgba(165,180,252,0.35)",
+                                bgcolor: "rgba(165,180,252,0.12)",
+                                ...breakLongTextSx
+                              }}
+                            >
+                              {label}
+                            </Box>
+                          ))}
+                        </Stack>
+                      ) : null}
+
+                      {detail.sidebar.linkedIssue.requiredSkills && detail.sidebar.linkedIssue.requiredSkills.length > 0 ? (
+                        <Typography sx={{ color: "#94a3b8", fontSize: 11, mt: 1, ...breakLongTextSx }}>
+                          Skills: {detail.sidebar.linkedIssue.requiredSkills.join(", ")}
+                        </Typography>
+                      ) : null}
+
+                      {detail.sidebar.linkedIssue.expectedOutcome && detail.sidebar.linkedIssue.expectedOutcome.length > 0 ? (
+                        <Typography sx={{ color: "#94a3b8", fontSize: 11, mt: 0.6, ...breakLongTextSx }}>
+                          Expected: {detail.sidebar.linkedIssue.expectedOutcome.join(" | ")}
+                        </Typography>
+                      ) : null}
+
+                      {detail.sidebar.linkedIssue.suggestedResources && detail.sidebar.linkedIssue.suggestedResources.length > 0 ? (
+                        <Stack spacing={0.45} sx={{ mt: 0.9 }}>
+                          <Typography sx={{ color: "#94a3b8", fontSize: 11 }}>Resources:</Typography>
+                          {detail.sidebar.linkedIssue.suggestedResources.slice(0, 3).map((resource) => (
+                            <Typography key={`${resource.title}-${resource.url}`} sx={{ fontSize: 11, color: "#93c5fd", ...breakLongTextSx }}>
+                              • <Box component="a" href={resource.url} target="_blank" rel="noreferrer" sx={{ color: "#93c5fd", textDecoration: "none", "&:hover": { textDecoration: "underline" } }}>{resource.title}</Box>
+                            </Typography>
+                          ))}
+                        </Stack>
+                      ) : null}
+
+                      {(detail.sidebar.linkedIssue.githubCreatedAt || detail.sidebar.linkedIssue.githubUpdatedAt || detail.sidebar.linkedIssue.claimedByLogin) ? (
+                        <Typography sx={{ color: "#64748b", fontSize: 11, mt: 0.8, ...breakLongTextSx }}>
+                          {detail.sidebar.linkedIssue.claimedByLogin ? `Claimed by ${detail.sidebar.linkedIssue.claimedByLogin}` : "Not claimed"}
+                          {formatIssueDate(detail.sidebar.linkedIssue.githubCreatedAt) ? ` · Created ${formatIssueDate(detail.sidebar.linkedIssue.githubCreatedAt)}` : ""}
+                          {formatIssueDate(detail.sidebar.linkedIssue.githubUpdatedAt) ? ` · Updated ${formatIssueDate(detail.sidebar.linkedIssue.githubUpdatedAt)}` : ""}
+                        </Typography>
+                      ) : null}
+
+                      <Stack direction="row" spacing={1} sx={{ mt: 1.25, flexWrap: "wrap", rowGap: 0.75 }}>
+                        <Button
+                          onClick={handleViewIssue}
+                          disabled={!detail.sidebar.linkedIssue.id && !detail.sidebar.linkedIssue.githubUrl}
+                          sx={{
+                            height: 32,
+                            borderRadius: "10px",
+                            px: 1.5,
+                            textTransform: "none",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            bgcolor: "rgba(25,230,107,0.12)",
+                            color: "#19e66b",
+                            border: "1px solid rgba(25,230,107,0.35)",
+                            "&:hover": { bgcolor: "rgba(25,230,107,0.18)" }
+                          }}
+                        >
+                          View Issue
+                        </Button>
+
+                        {detail.sidebar.linkedIssue.githubUrl ? (
+                          <Button
+                            component="a"
+                            href={detail.sidebar.linkedIssue.githubUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            sx={{
+                              height: 32,
+                              borderRadius: "10px",
+                              px: 1.5,
+                              textTransform: "none",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              bgcolor: "rgba(255,255,255,0.06)",
+                              color: "#cbd5e1",
+                              border: "1px solid rgba(255,255,255,0.18)",
+                              "&:hover": { bgcolor: "rgba(255,255,255,0.10)" }
+                            }}
+                          >
+                            Open on GitHub
+                          </Button>
+                        ) : null}
+                      </Stack>
                     </Box>
                   ) : (
                     <Typography sx={{ color: "#64748b", fontSize: 13, mt: 2 }}>No linked issue metadata available.</Typography>
@@ -429,12 +644,12 @@ export default function PrTrackingDetailPage() {
                   <Stack spacing={1.25} sx={{ mt: 2 }}>
                     {detail.sidebar.filesChanged.length > 0 ? (
                       detail.sidebar.filesChanged.map((file) => (
-                        <Stack key={file.path} direction="row" justifyContent="space-between" alignItems="center">
-                          <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack key={file.path} direction="row" justifyContent="space-between" alignItems="center" sx={{ minWidth: 0, gap: 1 }}>
+                          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
                             <MSym name="description" sx={{ fontSize: 12, color: "#94a3b8" }} />
-                            <Typography sx={{ color: "#cbd5e1", fontSize: 12 }}>{file.path}</Typography>
+                            <Typography sx={{ color: "#cbd5e1", fontSize: 12, ...breakLongTextSx }}>{file.path}</Typography>
                           </Stack>
-                          <Stack direction="row" spacing={0.5}>
+                          <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
                             <Typography sx={{ color: "#19e66b", fontSize: 10, fontWeight: 700 }}>+{file.additions}</Typography>
                             <Typography sx={{ color: "#ef4444", fontSize: 10, fontWeight: 700 }}>-{file.deletions}</Typography>
                           </Stack>
@@ -445,7 +660,10 @@ export default function PrTrackingDetailPage() {
                     )}
                   </Stack>
 
-                  <Button sx={{ mt: 2, width: "100%", height: 36, borderRadius: "16px", textTransform: "none", color: "#94a3b8", border: "1px solid #334155" }}>
+                  <Button
+                    onClick={handleViewAllChanges}
+                    sx={{ mt: 2, width: "100%", height: 36, borderRadius: "16px", textTransform: "none", color: "#94a3b8", border: "1px solid #334155" }}
+                  >
                     View All Changes
                   </Button>
                 </Paper>
@@ -456,25 +674,7 @@ export default function PrTrackingDetailPage() {
       </Box>
 
       <Box sx={{ borderTop: "1px solid #1e293b", px: 3, py: 4, mt: 3 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ maxWidth: 1440, mx: "auto" }}>
-          <Stack direction="row" spacing={3}>
-            <Typography sx={{ color: "#64748b", fontSize: 12 }}>© 2024 OpenCollab Inc.</Typography>
-            <Typography
-              component={RouterLink}
-              to="/terms"
-              sx={{ color: "#64748b", fontSize: 12, textDecoration: "none", "&:hover": { color: "#e2e8f0" } }}
-            >
-              Terms
-            </Typography>
-            <Typography
-              component={RouterLink}
-              to="/privacy"
-              sx={{ color: "#64748b", fontSize: 12, textDecoration: "none", "&:hover": { color: "#e2e8f0" } }}
-            >
-              Privacy
-            </Typography>
-            <Typography sx={{ color: "#64748b", fontSize: 12 }}>Security</Typography>
-          </Stack>
+        <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ maxWidth: 1440, mx: "auto" }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <Box sx={{ width: 8, height: 8, borderRadius: 999, bgcolor: "#19e66b" }} />
             <Typography sx={{ color: "#64748b", fontSize: 12 }}>{detail?.sidebar.systemStatusLabel || "All systems operational"}</Typography>

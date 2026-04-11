@@ -222,9 +222,28 @@ const DUMMY_DETAIL: Record<string, PrDetailResponse> = {
       ],
       note: "This requires a new environment variable JWT_SECRET to be set in production.",
       linkedIssue: {
+        id: "demo-issue-123",
         number: 123,
         title: "Implement Secure Auth Flow",
-        openedBy: "systems_lead"
+        openedBy: "systems_lead",
+        status: "claimed",
+        prStatus: "PR_OPEN",
+        summary: "Secure authentication flow implementation with token lifecycle and route protection.",
+        repoOwner: "opencollab",
+        repoName: "core-engine",
+        repoLanguage: "TypeScript",
+        difficulty: "intermediate",
+        beginnerFriendly: false,
+        labels: ["security", "auth", "backend"],
+        githubUrl: "https://github.com/opencollab/core-engine/issues/123",
+        claimedByLogin: "systems_lead",
+        githubCreatedAt: new Date().toISOString(),
+        githubUpdatedAt: new Date().toISOString(),
+        requiredSkills: ["jwt", "express", "typescript"],
+        expectedOutcome: ["Secure token flow", "Protected API routes"],
+        suggestedResources: [
+          { title: "JWT Handbook", url: "https://jwt.io/introduction", type: "Guide" }
+        ]
       }
     },
     timeline: [
@@ -278,7 +297,30 @@ const DUMMY_DETAIL: Record<string, PrDetailResponse> = {
         { path: "src/middleware/auth.ts", additions: 45, deletions: 0 },
         { path: "src/routes/login.ts", additions: 12, deletions: 30 }
       ],
-      linkedIssue: { number: 123, title: "Implement Secure Auth Flow", openedBy: "systems_lead" },
+      linkedIssue: {
+        id: "demo-issue-123",
+        number: 123,
+        title: "Implement Secure Auth Flow",
+        openedBy: "systems_lead",
+        status: "claimed",
+        prStatus: "PR_OPEN",
+        summary: "Secure authentication flow implementation with token lifecycle and route protection.",
+        repoOwner: "opencollab",
+        repoName: "core-engine",
+        repoLanguage: "TypeScript",
+        difficulty: "intermediate",
+        beginnerFriendly: false,
+        labels: ["security", "auth", "backend"],
+        githubUrl: "https://github.com/opencollab/core-engine/issues/123",
+        claimedByLogin: "systems_lead",
+        githubCreatedAt: new Date().toISOString(),
+        githubUpdatedAt: new Date().toISOString(),
+        requiredSkills: ["jwt", "express", "typescript"],
+        expectedOutcome: ["Secure token flow", "Protected API routes"],
+        suggestedResources: [
+          { title: "JWT Handbook", url: "https://jwt.io/introduction", type: "Guide" }
+        ]
+      },
       systemStatusLabel: "All systems operational"
     }
   }

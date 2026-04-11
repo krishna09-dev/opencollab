@@ -394,7 +394,9 @@ export default function ClaimedIssuesPage() {
 
                       <Stack direction={{ xs: "row", lg: "column" }} spacing={1}>
                         <Button
-                          onClick={() => navigate(`/issues/${issue._id}`)}
+                          onClick={() => navigate(`/issues/${issue._id}`, {
+                            state: { fromPath: "/profile/claimed-issues", fromPage: "claimed-issues", fromLabel: "claimed issues" }
+                          })}
                           sx={{
                             minHeight: 36,
                             textTransform: "none",

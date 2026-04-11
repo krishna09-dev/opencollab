@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { api, authHeaders } from "../../../lib/api";
 import { Box, CircularProgress, Typography, Paper, Container } from "@mui/material";
+import UserLegalFooter from "../../../components/layout/UserLegalFooter";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -53,45 +54,52 @@ function AuthCallbackPage() {
         minHeight: "100vh",
         bgcolor: "#050509",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        flexDirection: "column",
         color: "#f5f5f5"
       }}
     >
-      <Container maxWidth="sm">
-        <Paper
-          elevation={0}
-          sx={{
-            p: 4,
-            bgcolor: "#0b0b12",
-            borderRadius: 3,
-            border: "1px solid #262636",
-            textAlign: "center"
-          }}
-        >
-          {error ? (
-            <>
-              <Typography variant="h6" sx={{ mb: 1, color: "#ff6b3d" }}>
-                Something went wrong
-              </Typography>
-              <Typography variant="body2" sx={{ color: "#d0d0e0" }}>
-                {error}
-              </Typography>
-            </>
-          ) : (
-            <>
-              <CircularProgress sx={{ mb: 3 }} />
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Connecting to GitHub…
-              </Typography>
-              <Typography variant="body2" sx={{ color: "#a0a0b5" }}>
-                We're verifying your GitHub account and loading your OpenCollab
-                profile. This usually takes just a moment.
-              </Typography>
-            </>
-          )}
-        </Paper>
-      </Container>
+      <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", px: 2 }}>
+        <Container maxWidth="sm">
+          <Paper
+            elevation={0}
+            sx={{
+              p: 4,
+              bgcolor: "#0b0b12",
+              borderRadius: 3,
+              border: "1px solid #262636",
+              textAlign: "center"
+            }}
+          >
+            {error ? (
+              <>
+                <Typography variant="h6" sx={{ mb: 1, color: "#ff6b3d" }}>
+                  Something went wrong
+                </Typography>
+                <Typography variant="body2" sx={{ color: "#d0d0e0" }}>
+                  {error}
+                </Typography>
+              </>
+            ) : (
+              <>
+                <CircularProgress sx={{ mb: 3 }} />
+                <Typography variant="h6" sx={{ mb: 1 }}>
+                  Connecting to GitHub…
+                </Typography>
+                <Typography variant="body2" sx={{ color: "#a0a0b5" }}>
+                  We're verifying your GitHub account and loading your OpenCollab
+                  profile. This usually takes just a moment.
+                </Typography>
+              </>
+            )}
+          </Paper>
+        </Container>
+      </Box>
+
+      <UserLegalFooter
+        sx={{ bgcolor: "#050509", borderColor: "rgba(255,255,255,0.08)" }}
+        textColor="rgba(229,231,235,0.55)"
+        linkColor="rgba(229,231,235,0.75)"
+      />
     </Box>
   );
 }

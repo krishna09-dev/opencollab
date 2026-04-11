@@ -139,7 +139,7 @@ export default function LoginHero() {
           to="/terms"
           sx={{ textDecoration: "underline", color: "inherit", cursor: "pointer" }}
         >
-          Terms
+          Terms and Conditions
         </Box>{" "}
         •{" "}
         <Box
@@ -147,7 +147,7 @@ export default function LoginHero() {
           to="/privacy"
           sx={{ textDecoration: "underline", color: "inherit", cursor: "pointer" }}
         >
-          Privacy
+          Privacy Policy
         </Box>
       </Typography>
     </Box>

@@ -195,6 +195,7 @@ function SavedIssueCard({
   onUnsave: (id: string) => void;
 }) {
   const navigate = useNavigate();
+  const issueDetailNavState = { fromPath: "/saved", fromPage: "saved" as const, fromLabel: "saved issues" };
 
   return (
     <Box
@@ -208,7 +209,7 @@ function SavedIssueCard({
         transition: "border-color 0.2s",
         "&:hover": { borderColor: "#3f3f46" }
       }}
-      onClick={() => navigate(`/issues/${entry.id}`)}
+      onClick={() => navigate(`/issues/${entry.id}`, { state: issueDetailNavState })}
     >
       <Stack direction="row" spacing={2} alignItems="flex-start">
         <Adjust sx={{ fontSize: 22, mt: 0.5, color: "#0df259" }} />
@@ -307,7 +308,7 @@ function SavedIssueCard({
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/issues/${entry.id}`);
+              navigate(`/issues/${entry.id}`, { state: issueDetailNavState });
             }}
             sx={{
               minHeight: 36,

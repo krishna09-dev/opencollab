@@ -22,6 +22,8 @@ export default function LegalPageShell({
   lastUpdated,
   sections
 }: LegalPageShellProps) {
+  const currentYear = new Date().getFullYear();
+
   return (
     <Box
       sx={{
@@ -262,17 +264,14 @@ export default function LegalPageShell({
           sx={{ mt: 4.2, pt: 2.7, borderTop: "1px solid rgba(71,85,105,0.28)" }}
         >
           <Typography sx={{ color: "#64748b", fontSize: 13 }}>
-            (c) 2026 OpenCollab Inc. All rights reserved.
+            Copyright {currentYear} OpenCollab. All rights reserved.
           </Typography>
           <Stack direction="row" spacing={2}>
-            <Typography component={RouterLink} to="/terms" sx={{ color: "#94a3b8", fontSize: 13, textDecoration: "none", "&:hover": { color: "#e2e8f0" } }}>
-              Terms
-            </Typography>
             <Typography component={RouterLink} to="/privacy" sx={{ color: "#94a3b8", fontSize: 13, textDecoration: "none", "&:hover": { color: "#e2e8f0" } }}>
-              Privacy
+              Privacy Policy
             </Typography>
-            <Typography component={RouterLink} to="/" sx={{ color: "#94a3b8", fontSize: 13, textDecoration: "none", "&:hover": { color: "#e2e8f0" } }}>
-              Home
+            <Typography component={RouterLink} to="/terms" sx={{ color: "#94a3b8", fontSize: 13, textDecoration: "none", "&:hover": { color: "#e2e8f0" } }}>
+              Terms and Conditions
             </Typography>
           </Stack>
         </Stack>

@@ -94,6 +94,6 @@ connectDB().then(() => {
 
   app.listen(PORT, () => {
     console.log(`🚀 API running at http://localhost:${PORT}`);
-    console.log("✅ Allowed CORS origins:", allowedOrigins);
+    console.log(`✅ Allowed CORS origins:`, allowedOrigins);
   });
 });
