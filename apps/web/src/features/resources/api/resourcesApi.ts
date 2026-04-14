@@ -124,7 +124,7 @@ function mapBackendToResourceItem(r: BackendResource): ResourceItem {
   };
 }
 
-function buildParams(filters: ResourceFilterState) {
+function buildParams(filters: ResourceFilterState, page: number, limit: number) {
   const params = new URLSearchParams();
 
   const q = filters.q.trim();
@@ -148,20 +148,29 @@ function buildParams(filters: ResourceFilterState) {
     params.set("category", filters.category);
   }
 
-  params.set("limit", "80");
-  params.set("page", "1");
+  params.set("limit", String(limit));
+  params.set("page", String(page));
 
   return params;
 }
 
 /** ================= API CALLS ================= */
 
-export async function fetchResources(filters: ResourceFilterState): Promise<{
+export async function fetchResources(
+  filters: ResourceFilterState,
+  pagination?: { page?: number; limit?: number }
+): Promise<{
   featured: ResourceItem[];
   items: ResourceItem[];
   total: number;
+  totalPages: number;
+  page: number;
+  limit: number;
 }> {
-  const params = buildParams(filters);
+  const page = Math.max(1, pagination?.page ?? 1);
+  const limit = Math.min(Math.max(1, pagination?.limit ?? 12), 100);
+
+  const params = buildParams(filters, page, limit);
 
   const res = await api.get<BackendResourcesResponse>(`/api/resources?${params.toString()}`, {
     headers: authHeaders()
@@ -185,7 +194,17 @@ export async function fetchResources(filters: ResourceFilterState): Promise<{
       ? featured.filter((x) => x.type === "cheatsheet")
       : featured;
 
-  return { featured: finalFeatured, items: finalItems, total: res.data.total ?? finalItems.length };
+  const total = res.data.total ?? finalItems.length;
+  const totalPages = res.data.totalPages ?? Math.max(1, Math.ceil(total / limit));
+
+  return {
+    featured: finalFeatured,
+    items: finalItems,
+    total,
+    totalPages,
+    page: res.data.page ?? page,
+    limit: res.data.limit ?? limit
+  };
 }
 
 export type SuggestResourceInput = {

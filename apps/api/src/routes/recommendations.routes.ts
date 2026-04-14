@@ -149,7 +149,7 @@ async function fetchDatabaseIssues() {
     .select(
       "_id repoOwner repoName title body summary labels requiredSkills beginnerFriendly status claimedByLogin"
     )
-    .limit(100)
+    .limit(500)
     .lean();
 
   return issues.map((issue: any) => ({
@@ -251,7 +251,6 @@ router.get("/", authRequired, async (req: AuthRequest, res: Response) => {
       err?.code === "ECONNREFUSED" ||
       err?.code === "ETIMEDOUT" ||
       err?.code === "ECONNABORTED" ||
-      err?.code === "ERR_BAD_RESPONSE" ||
       [404, 422, 429, 500, 502, 503, 504].includes(err?.response?.status);
 
     if (shouldUseFallback) {
@@ -404,7 +403,6 @@ router.post("/custom", authRequired, async (req: AuthRequest, res: Response) => 
       err?.code === "ECONNREFUSED" ||
       err?.code === "ETIMEDOUT" ||
       err?.code === "ECONNABORTED" ||
-      err?.code === "ERR_BAD_RESPONSE" ||
       [404, 422, 429, 500, 502, 503, 504].includes(err?.response?.status);
 
     if (shouldUseFallback) {
