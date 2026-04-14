@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box,
   Button,
@@ -10,7 +10,7 @@ import {
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 
-import type { ResourceCategory, ResourceDifficulty, ResourceFilterState, ResourceItem } from "../types";
+import type { ResourceCategory, ResourceDifficulty, ResourceFilterState } from "../types";
 import MSym from "../components/MSym";
 import { useResources } from "../hooks/useResources";
 import AppLayout from "../../../components/layout/AppLayout";
@@ -77,9 +77,38 @@ function ResourcesSidebarExtra({
 
 export default function ResourcesPage() {
   const navigate = useNavigate();
+  const PAGE_SIZE = 5;
 
   const [filters, setFilters] = useState<ResourceFilterState>(DEFAULT_FILTERS);
-  const { loading, error, featured, items } = useResources(filters);
+  const [page, setPage] = useState(1);
+  const { loading, error, items, total, totalPages } = useResources(filters, { page, limit: PAGE_SIZE });
+
+  const updateFilters: React.Dispatch<React.SetStateAction<ResourceFilterState>> = (next) => {
+    setFilters(next);
+    setPage(1);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName ?? "";
+      const isEditable =
+        !!target?.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+
+      if (isEditable) return;
+
+      if (event.key === "ArrowRight") {
+        setPage((current) => Math.min(totalPages, current + 1));
+      }
+
+      if (event.key === "ArrowLeft") {
+        setPage((current) => Math.max(1, current - 1));
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [totalPages]);
 
   const topics: Array<{ icon: string; title: string; category: ResourceCategory | "All" }> = [
     { icon: "apps", title: "All Topics", category: "All" },
@@ -92,20 +121,6 @@ export default function ResourcesPage() {
 
   const workflowSteps = ["Issue", "Fork", "Branch", "Code", "Commit", "PR", "Review", "Merge"];
 
-  const curatedGuides = useMemo(() => {
-    const merged: ResourceItem[] = [];
-    const seen = new Set<string>();
-
-    for (const item of [...featured, ...items]) {
-      if (seen.has(item.id)) continue;
-      seen.add(item.id);
-      merged.push(item);
-      if (merged.length >= 3) break;
-    }
-
-    return merged;
-  }, [featured, items]);
-
   const difficultyMeta = (difficulty: ResourceDifficulty) => {
     if (difficulty === "beginner") {
       return { color: "#2dd4bf", bg: "rgba(45,212,191,0.10)", border: "rgba(45,212,191,0.20)", iconBg: "rgba(25,230,107,0.10)" };
@@ -117,7 +132,7 @@ export default function ResourcesPage() {
   };
 
   return (
-    <AppLayout activePage="resources" sidebarExtra={<ResourcesSidebarExtra filters={filters} setFilters={setFilters} />}>
+    <AppLayout activePage="resources" sidebarExtra={<ResourcesSidebarExtra filters={filters} setFilters={updateFilters} />}>
       <Box sx={{ maxWidth: 1152, mx: "auto", px: 3, py: 5 }}>
         <Typography sx={{ fontSize: 42, lineHeight: "48px", fontWeight: 700, letterSpacing: -0.8 }}>
           Learning Resources
@@ -145,7 +160,7 @@ export default function ResourcesPage() {
             <MSym name="search" sx={{ color: "#a1a1aa", fontSize: 18 }} />
             <InputBase
               value={filters.q}
-              onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
+              onChange={(e) => updateFilters((prev) => ({ ...prev, q: e.target.value }))}
               placeholder="Search guides, tutorials, or topics..."
               sx={{ color: "#fff", fontSize: 14, width: "100%" }}
             />
@@ -163,7 +178,7 @@ export default function ResourcesPage() {
               <Paper
                 key={topic.title}
                 elevation={0}
-                onClick={() => setFilters((prev) => ({ ...prev, category: topic.category }))}
+                onClick={() => updateFilters((prev) => ({ ...prev, category: topic.category }))}
                 sx={{
                   bgcolor: active ? "rgba(25,230,107,0.08)" : "#0b0f17",
                   border: active ? "1px solid rgba(25,230,107,0.30)" : "1px solid #27272a",
@@ -251,7 +266,7 @@ export default function ResourcesPage() {
           </Paper>
         )}
 
-        {!loading && !error && curatedGuides.length === 0 && (
+        {!loading && !error && items.length === 0 && (
           <Paper
             elevation={0}
             sx={{
@@ -316,7 +331,10 @@ export default function ResourcesPage() {
                   Go To Issue Feed
                 </Button>
                 <Button
-                  onClick={() => setFilters(DEFAULT_FILTERS)}
+                  onClick={() => {
+                    setFilters(DEFAULT_FILTERS);
+                    setPage(1);
+                  }}
                   sx={{
                     height: 48,
                     borderRadius: "14px",
@@ -335,9 +353,9 @@ export default function ResourcesPage() {
           </Paper>
         )}
 
-        {!loading && !error && curatedGuides.length > 0 && (
+        {!loading && !error && items.length > 0 && (
           <Stack spacing={2}>
-            {curatedGuides.map((guide) => {
+            {items.map((guide) => {
               const meta = difficultyMeta(guide.difficulty);
               return (
                 <Paper key={guide.id} elevation={0} sx={{ bgcolor: "#0b0f17", border: "1px solid #27272a", borderRadius: "20px", px: 3, py: 2.5 }}>
@@ -396,6 +414,60 @@ export default function ResourcesPage() {
                 </Paper>
               );
             })}
+          </Stack>
+        )}
+
+        {!loading && !error && total > 0 && (
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={2}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            sx={{ mt: 3 }}
+          >
+            <Typography sx={{ color: "#a1a1aa", fontSize: 13 }}>
+              Showing {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)} of {total} resources
+            </Typography>
+
+            {totalPages > 1 && (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Button
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page <= 1}
+                  startIcon={<MSym name="chevron_left" sx={{ fontSize: 18 }} />}
+                  sx={{
+                    borderRadius: "12px",
+                    textTransform: "none",
+                    color: "#e4e4e7",
+                    border: "1px solid #27272a",
+                    px: 1.5,
+                    minWidth: 0
+                  }}
+                >
+                  Prev
+                </Button>
+
+                <Typography sx={{ color: "#a1a1aa", fontSize: 13, minWidth: 90, textAlign: "center" }}>
+                  Page {page}/{totalPages}
+                </Typography>
+
+                <Button
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page >= totalPages}
+                  endIcon={<MSym name="chevron_right" sx={{ fontSize: 18 }} />}
+                  sx={{
+                    borderRadius: "12px",
+                    textTransform: "none",
+                    color: "#e4e4e7",
+                    border: "1px solid #27272a",
+                    px: 1.5,
+                    minWidth: 0
+                  }}
+                >
+                  Next
+                </Button>
+              </Stack>
+            )}
           </Stack>
         )}
       </Box>
