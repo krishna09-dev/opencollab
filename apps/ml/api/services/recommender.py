@@ -6,8 +6,8 @@ from typing import List
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from models.schemas import DatabaseIssue, IssueRecommendation, UserProfile
-from utils.text_processing import (
+from ..models.schemas import DatabaseIssue, IssueRecommendation, UserProfile
+from ..utils.text_processing import (
     build_issue_text,
     build_user_query,
     clean_text,

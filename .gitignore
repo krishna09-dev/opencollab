@@ -10,3 +10,4 @@ __pycache__/
 *.pyc
 apps/ml/venv/
 apps/ml/.venv/
+coverage/

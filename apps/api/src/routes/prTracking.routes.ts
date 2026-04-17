@@ -204,11 +204,12 @@ router.post(
 
       return res.status(201).json({ message: "Tracking ensured", item: doc });
     } catch (err: any) {
-      console.error("POST /api/pr-tracking/ensure error:", err);
-      const statusCode = err.statusCode || 500;
+      const statusCode = err?.statusCode || 500;
       if (statusCode >= 400 && statusCode < 500) {
         return res.status(statusCode).json({ message: err.message || "Failed to ensure tracking" });
       }
+
+      console.error("POST /api/pr-tracking/ensure error:", err);
       return res.status(500).json({ message: "Failed to ensure tracking" });
     }
   }
