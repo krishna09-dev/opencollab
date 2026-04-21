@@ -11,9 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 
-from .models.schemas import RecommendationResponse, RecommendRequest
-from .services import compute_recommendations
-from .services.beginner_scorer import (
+from models.schemas import RecommendationResponse, RecommendRequest
+from services import compute_recommendations
+from services.beginner_scorer import (
     compute_beginner_score,
     should_auto_approve,
     compare_with_manual_label,
