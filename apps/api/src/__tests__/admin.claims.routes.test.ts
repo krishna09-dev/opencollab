@@ -8,12 +8,9 @@ import {
   getTestApp
 } from "./testUtils";
 
-let patchSpy: jest.SpiedFunction<typeof axios.patch>;
-
 describe("Admin claims routes", () => {
   beforeEach(() => {
     process.env.GITHUB_SYSTEM_TOKEN = "test-system-token";
-    patchSpy = jest.spyOn(axios, "patch").mockResolvedValue({ data: {} } as any);
   });
 
   test("GET /api/admin/claims denies regular users", async () => {
@@ -109,6 +106,7 @@ describe("Admin claims routes", () => {
   });
 
   test("POST /api/admin/claims/:id/force-release reopens claim and returns watcher notification count", async () => {
+    const patchSpy = jest.spyOn(axios, "patch").mockResolvedValue({ data: {} } as any);
     const app = getTestApp();
     const admin = await createUser("admin");
     const claimer = await createUser("user");
