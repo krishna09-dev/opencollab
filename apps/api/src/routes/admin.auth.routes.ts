@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { AdminUser } from "../models/AdminUser";
-import { signUserJwt } from "../utils/jwt";
+import { signUserJwt, verifyUserJwt } from "../utils/jwt";
 import { authRateLimiter } from "../middleware/rateLimit";
 
 const router = Router();
@@ -10,7 +10,6 @@ const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
 
 // GET /auth/admin/github
-// Starts moderator/admin GitHub login and uses state to branch in shared callback.
 router.get("/github", (_req: Request, res: Response) => {
   if (!GITHUB_CLIENT_ID || !GITHUB_CALLBACK_URL) {
     return res.status(500).json({
@@ -124,7 +123,6 @@ router.get("/me", async (req: Request, res: Response) => {
     return res.status(401).json({ message: "No token provided" });
   }
 
-  const { verifyUserJwt } = await import("../utils/jwt");
   const decoded = verifyUserJwt(header.split(" ")[1]);
 
   if (!decoded || !decoded.userId) {
