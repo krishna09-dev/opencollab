@@ -62,6 +62,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
-
+ 
       - name: Build Web
         run: pnpm -C apps/web build
