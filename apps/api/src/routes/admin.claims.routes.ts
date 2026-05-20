@@ -233,7 +233,7 @@ router.post(
         createdAt: new Date()
       });
 
-      const notifiedWatchers = notifyIssueWatchersIssueAvailable(issue);
+      const notifiedWatchers = await notifyIssueWatchersIssueAvailable(issue);
 
       await issue.save();
 

@@ -8,7 +8,7 @@ import {
   type IssueUpdateItem,
   type SetupInstruction
 } from "../models/Issue";
-import { notifications, type NotificationDto } from "../routes/notifications.routes";
+import { Notification } from "../models/Notification";
 
 // ========== CONSTANTS ==========
 const DEFAULT_OWNER = "GoogleCloudPlatform";
@@ -47,7 +47,7 @@ export function shortId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-export function notifyIssueWatchersIssueAvailable(issue: IssueDocument): number {
+export async function notifyIssueWatchersIssueAvailable(issue: IssueDocument): Promise<number> {
   const watcherUserIds = Array.from(
     new Set((issue.notifyWatchers || []).map((id) => String(id || "").trim()).filter(Boolean))
   );
@@ -57,21 +57,17 @@ export function notifyIssueWatchersIssueAvailable(issue: IssueDocument): number 
     return 0;
   }
 
-  const now = new Date().toISOString();
   const issueId = String(issue._id);
-
-  watcherUserIds.forEach((watcherUserId) => {
-    const notification: NotificationDto = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  await Notification.insertMany(
+    watcherUserIds.map((watcherUserId) => ({
       userId: watcherUserId,
       type: "ISSUE_AVAILABLE",
       issueId,
       issueTitle: issue.title,
-      createdAt: now,
+      message: `${issue.title} is available again`,
       read: false
-    };
-    notifications.push(notification);
-  });
+    }))
+  );
 
   issue.notifyWatchers = [];
   return watcherUserIds.length;
@@ -1172,42 +1168,80 @@ export class IssuesService {
     const displayName = user.login || userId;
 
     if (issue.status === "claimed" && issue.claimedByUserId !== userId) {
-      return { success: false, status: 403, data: { message: `Issue already claimed by ${issue.claimedByLogin}.` } };
+      return {
+        success: false,
+        status: 409,
+        data: { message: "Issue has already been claimed by another user." }
+      };
     }
     if (issue.status === "claimed" && issue.claimedByUserId === userId) {
       return { success: true, status: 200, data: { message: "Issue already claimed by this user.", issue } };
     }
 
-    issue.status = "claimed";
-    issue.claimedByUserId = userId;
-    issue.claimedByLogin = displayName;
-    issue.claimedAt = new Date();
-
-    issue.contributionTimeline = [
+    const now = new Date();
+    const claimedIssue = await Issue.findOneAndUpdate(
       {
-        id: shortId("tl"),
-        title: "Issue accepted in OpenCollab",
-        status: "ACCEPTED",
-        at: new Date(),
-        meta: null
+        _id: issue._id,
+        status: "open"
+      },
+      {
+        $set: {
+          status: "claimed",
+          claimedByUserId: userId,
+          claimedByLogin: displayName,
+          claimedAt: now,
+          contributionTimeline: [
+            {
+              id: shortId("tl"),
+              title: "Issue accepted in OpenCollab",
+              status: "ACCEPTED",
+              at: now,
+              meta: null
+            }
+          ]
+        },
+        $push: {
+          updates: {
+            id: shortId("claim"),
+            actorLogin: displayName,
+            actorRole: "OPENCOLLAB",
+            body: `${displayName} claimed this issue`,
+            createdAt: now
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!claimedIssue) {
+      const latestIssue = await Issue.findById(issue._id);
+      if (!latestIssue) {
+        return { success: false, status: 404, data: { message: "Issue not found" } };
       }
-    ];
+      if (latestIssue.status === "closed") {
+        return { success: false, status: 400, data: { message: "Issue is closed." } };
+      }
+      if (latestIssue.status === "claimed" && latestIssue.claimedByUserId === userId) {
+        return {
+          success: true,
+          status: 200,
+          data: { message: "Issue already claimed by this user.", issue: latestIssue }
+        };
+      }
 
-    issue.updates.push({
-      id: shortId("claim"),
-      actorLogin: displayName,
-      actorRole: "OPENCOLLAB",
-      body: `${displayName} claimed this issue`,
-      createdAt: new Date()
-    });
+      return {
+        success: false,
+        status: 409,
+        data: { message: "Issue has already been claimed by another user." }
+      };
+    }
 
-    await issue.save();
     return {
       success: true,
       status: 200,
       data: {
         message: "Issue successfully claimed.",
-        issue
+        issue: claimedIssue
       }
     };
   }
@@ -1245,7 +1279,7 @@ export class IssuesService {
       createdAt: new Date()
     });
 
-    notifyIssueWatchersIssueAvailable(issue);
+    await notifyIssueWatchersIssueAvailable(issue);
     await issue.save();
 
     return {

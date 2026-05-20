@@ -1,20 +1,31 @@
 // apps/api/src/routes/notifications.routes.ts
 import { Router, Response } from "express";
 import { AuthRequest, authRequired } from "../middleware/auth";
-
-export type NotificationType = "ISSUE_AVAILABLE";
+import { Notification, type NotificationDocument, type NotificationType } from "../models/Notification";
 
 export interface NotificationDto {
   id: string;
   userId: string;
   type: NotificationType;
-  issueId: string;
-  issueTitle: string;
+  issueId?: string | null;
+  issueTitle?: string | null;
+  message?: string | null;
   createdAt: string;
   read: boolean;
 }
 
-export const notifications: NotificationDto[] = [];
+function toNotificationDto(n: NotificationDocument): NotificationDto {
+  return {
+    id: String(n._id),
+    userId: n.userId,
+    type: n.type,
+    issueId: n.issueId ?? null,
+    issueTitle: n.issueTitle ?? null,
+    message: n.message ?? null,
+    createdAt: n.createdAt.toISOString(),
+    read: n.read
+  };
+}
 
 const router = Router();
 
@@ -25,13 +36,17 @@ const router = Router();
 router.get(
   "/notifications",
   authRequired,
-  (req: AuthRequest, res: Response) => {
-    const userId = req.userId!;
-    const userNotifications = notifications
-      .filter((n) => n.userId === userId)
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const userNotifications = await Notification.find({ userId })
+        .sort({ createdAt: -1 });
 
-    return res.json(userNotifications);
+      return res.json(userNotifications.map(toNotificationDto));
+    } catch (err) {
+      console.error("GET /api/notifications error:", err);
+      return res.status(500).json({ message: "Failed to load notifications." });
+    }
   }
 );
 
@@ -42,22 +57,25 @@ router.get(
 router.post(
   "/notifications/read-all",
   authRequired,
-  (req: AuthRequest, res: Response) => {
-    const userId = req.userId!;
-    notifications.forEach((n) => {
-      if (n.userId === userId) {
-        n.read = true;
-      }
-    });
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.userId!;
+      await Notification.updateMany(
+        { userId, read: false },
+        { $set: { read: true } }
+      );
 
-    const userNotifications = notifications
-      .filter((n) => n.userId === userId)
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      const userNotifications = await Notification.find({ userId })
+        .sort({ createdAt: -1 });
 
-    return res.json({
-      message: "All notifications marked as read.",
-      notifications: userNotifications
-    });
+      return res.json({
+        message: "All notifications marked as read.",
+        notifications: userNotifications.map(toNotificationDto)
+      });
+    } catch (err) {
+      console.error("POST /api/notifications/read-all error:", err);
+      return res.status(500).json({ message: "Failed to update notifications." });
+    }
   }
 );
 

@@ -1,4 +1,3 @@
-import { notifications } from "../routes/notifications.routes";
 import { clearTestDb, closeTestDb, initTestDb } from "./testUtils";
 
 process.env.NODE_ENV = "test";
@@ -13,7 +12,6 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  notifications.length = 0;
   await clearTestDb();
   jest.restoreAllMocks();
 });

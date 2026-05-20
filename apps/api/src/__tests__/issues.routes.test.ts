@@ -1,5 +1,5 @@
 import request from "supertest";
-import { notifications } from "../routes/notifications.routes";
+import { Notification } from "../models/Notification";
 import { authHeaderForUserId, createIssue, createUser, getTestApp } from "./testUtils";
 
 describe("Issues routes", () => {
@@ -64,7 +64,7 @@ describe("Issues routes", () => {
       .post(`/api/issues/${issue._id}/claim`)
       .set(authHeaderForUserId(String(userB._id)));
 
-    expect(claimByOtherRes.status).toBe(403);
+    expect(claimByOtherRes.status).toBe(409);
 
     const abortRes = await request(app)
       .post(`/api/issues/${issue._id}/abort`)
@@ -72,6 +72,25 @@ describe("Issues routes", () => {
 
     expect(abortRes.status).toBe(200);
     expect(abortRes.body.issue.status).toBe("open");
+  });
+
+  test("claim is atomic and allows only one successful claimant", async () => {
+    const app = getTestApp();
+    const userA = await createUser();
+    const userB = await createUser();
+    const issue = await createIssue();
+
+    const [resA, resB] = await Promise.all([
+      request(app)
+        .post(`/api/issues/${issue._id}/claim`)
+        .set(authHeaderForUserId(String(userA._id))),
+      request(app)
+        .post(`/api/issues/${issue._id}/claim`)
+        .set(authHeaderForUserId(String(userB._id)))
+    ]);
+
+    const statuses = [resA.status, resB.status].sort((a, b) => a - b);
+    expect(statuses).toEqual([200, 409]);
   });
 
   test("notify + abort sends watcher notification", async () => {
@@ -94,7 +113,7 @@ describe("Issues routes", () => {
       .post(`/api/issues/${issue._id}/abort`)
       .set(authHeaderForUserId(String(owner._id)));
 
-    const delivered = notifications.filter((n) => n.userId === String(watcher._id));
+    const delivered = await Notification.find({ userId: String(watcher._id) });
     expect(delivered).toHaveLength(1);
     expect(delivered[0].type).toBe("ISSUE_AVAILABLE");
   });
