@@ -6,15 +6,17 @@ on:
   push:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NODE_ENV: test
+  JWT_SECRET: ci_test_secret_that_is_long_enough_for_tests_123456789
+  JWT_EXPIRES_IN: "604800"
+
 jobs:
   api:
     name: API Build and Tests
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: apps/api
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,23 +33,18 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: ../..
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build API
-        run: pnpm build
+        run: pnpm -C apps/api build
 
       - name: Run API tests
-        run: pnpm test:run
+        run: pnpm -C apps/api test:run
 
   web:
     name: Web Build
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: apps/web
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,8 +61,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: ../..
-
+        run: pnpm install --frozen-lockfile --ignore-scripts
+ 
       - name: Build Web
-        run: pnpm build
+        run: pnpm -C apps/web build
