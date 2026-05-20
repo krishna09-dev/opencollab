@@ -103,7 +103,7 @@ export async function fetchOpenIssuesForRepo(params: {
 }) {
   const token = params.githubToken || process.env.GITHUB_SYSTEM_TOKEN;
   if (!token) {
-    throw new Error("GitHub token is not configured");
+    throw new Error("GITHUB_SYSTEM_TOKEN missing in .env");
   }
 
   const all: IngestedIssueDTO[] = [];

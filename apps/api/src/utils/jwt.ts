@@ -1,15 +1,23 @@
 import jwt, { Secret, SignOptions } from "jsonwebtoken";
 
-// Get JWT secret at runtime (after dotenv.config() has run)
+const WEAK_JWT_SECRETS = new Set([
+  "dev_secret",
+  "super_secret_jwt_string",
+  "replace_with_strong_secret"
+]);
+
 function getJwtSecret(): Secret {
-  return process.env.JWT_SECRET || "dev_secret";
+  const jwtSecret = (process.env.JWT_SECRET || "").trim();
+  if (!jwtSecret || WEAK_JWT_SECRETS.has(jwtSecret)) {
+    throw new Error(
+      "JWT_SECRET is missing or weak. Generate a strong secret using: openssl rand -base64 48"
+    );
+  }
+  return jwtSecret;
 }
 
-// Get expiry at runtime
-function getJwtExpiresIn(): number {
-  return process.env.JWT_EXPIRES_IN
-    ? Number(process.env.JWT_EXPIRES_IN)
-    : 60 * 60 * 24 * 7; // 7 days
+function getJwtExpiresIn(): SignOptions["expiresIn"] {
+  return (process.env.JWT_EXPIRES_IN || "604800") as SignOptions["expiresIn"];
 }
 
 interface JwtPayloadInput {
@@ -18,7 +26,7 @@ interface JwtPayloadInput {
 
 export function signUserJwt(payload: JwtPayloadInput): string {
   const signOptions: SignOptions = {
-    expiresIn: getJwtExpiresIn(),
+    expiresIn: getJwtExpiresIn()
   };
   return jwt.sign(payload, getJwtSecret(), signOptions);
 }
