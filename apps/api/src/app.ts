@@ -1,6 +1,8 @@
 import express from "express";
+import type { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import helmet from "helmet";
 
 import authRoutes from "./routes/auth.routes";
 import adminAuthRoutes from "./routes/admin.auth.routes";
@@ -46,6 +48,15 @@ export function createApp() {
   const app = express();
   const allowedOrigins = getAllowedOrigins();
 
+  app.set("trust proxy", 1);
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: "cross-origin" }
+    })
+  );
+
   app.use(
     cors({
       origin(origin, callback) {
@@ -85,6 +96,14 @@ export function createApp() {
   app.use("/api/admin", adminRequestsRoutes);
   app.use("/api/ml", mlRoutes);
   app.use("/api/reports", reportsRoutes);
+
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    const status = err.statusCode || err.status || 500;
+    console.error(`[${req.method} ${req.originalUrl}]`, err);
+    return res.status(status).json({
+      message: err.message || "Internal server error"
+    });
+  });
 
   return app;
 }

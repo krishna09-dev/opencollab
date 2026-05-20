@@ -17,7 +17,11 @@ export function getTestApp() {
 }
 
 export async function initTestDb() {
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryServer.create({
+    instance: {
+      ip: "127.0.0.1"
+    }
+  });
   await mongoose.connect(mongoServer.getUri());
 }
 

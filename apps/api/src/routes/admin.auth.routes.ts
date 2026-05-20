@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { AdminUser } from "../models/AdminUser";
 import { signUserJwt } from "../utils/jwt";
+import { authRateLimiter } from "../middleware/rateLimit";
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get("/github", (_req: Request, res: Response) => {
 });
 
 // POST /auth/admin/register
-router.post("/register", async (req: Request, res: Response) => {
+router.post("/register", authRateLimiter, async (req: Request, res: Response) => {
   const { username, password, role } = req.body;
 
   if (!username || !password) {
@@ -82,7 +83,7 @@ router.post("/register", async (req: Request, res: Response) => {
 });
 
 // POST /auth/admin/login
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", authRateLimiter, async (req: Request, res: Response) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
