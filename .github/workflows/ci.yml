@@ -11,6 +11,10 @@ env:
   NODE_ENV: test
   JWT_SECRET: ci_test_secret_that_is_long_enough_for_tests_123456789
   JWT_EXPIRES_IN: "604800"
+  GITHUB_CLIENT_ID: ci_dummy_client_id
+  GITHUB_CLIENT_SECRET: ci_dummy_client_secret
+  GITHUB_CALLBACK_URL: http://localhost:5001/auth/github/callback
+  FRONTEND_URL: http://localhost:5173
 
 jobs:
   api:
