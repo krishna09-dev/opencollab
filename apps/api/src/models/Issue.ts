@@ -285,6 +285,10 @@ IssueSchema.plugin(cleanupOptionalFieldsPlugin);
 
 // Unique key for upsert / dedupe
 IssueSchema.index({ repoOwner: 1, repoName: 1, githubNumber: 1 }, { unique: true });
+IssueSchema.index({ status: 1 });
+IssueSchema.index({ beginnerFriendly: 1 });
+IssueSchema.index({ githubUpdatedAt: -1 });
+IssueSchema.index({ repoOwner: 1, repoName: 1 });
 
 // list screens (fast sorting/filtering)
 IssueSchema.index({ beginnerFriendly: 1, status: 1, githubUpdatedAt: -1 });

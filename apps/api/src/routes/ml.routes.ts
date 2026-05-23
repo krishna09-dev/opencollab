@@ -7,10 +7,11 @@ import { validate } from "../middleware/validate";
 import { z } from "zod";
 import { Issue, MlScoring, MlOverride } from "../models/Issue";
 import { User } from "../models/User";
+import { env } from "../config/env";
 
 const router = Router();
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8001";
+const ML_SERVICE_URL = env.ML_SERVICE_URL;
 
 // ==================== VALIDATION SCHEMAS ====================
 
