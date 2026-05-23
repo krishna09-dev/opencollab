@@ -1,8 +1,8 @@
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import helmet from "helmet";
+import mongoose from "mongoose";
 
 import authRoutes from "./routes/auth.routes";
 import adminAuthRoutes from "./routes/admin.auth.routes";
@@ -22,8 +22,8 @@ import adminRequestsRoutes from "./routes/admin.requests.routes";
 import mlRoutes from "./routes/ml.routes";
 import reportsRoutes from "./routes/reports.routes";
 import moderatorRequestsRoutes from "./routes/moderator.requests.routes";
-
-dotenv.config();
+import docsRoutes from "./routes/docs.routes";
+import { env } from "./config/env";
 
 function normalizeOrigin(origin: string) {
   return origin.trim().replace(/\/+$/, "");
@@ -31,7 +31,7 @@ function normalizeOrigin(origin: string) {
 
 export function getAllowedOrigins(): string[] {
   return (
-    process.env.ALLOWED_ORIGINS ||
+    env.ALLOWED_ORIGINS ||
     [
       "http://localhost:5173",
       "https://opencollab.tech",
@@ -75,7 +75,19 @@ export function createApp() {
   app.use(express.json());
 
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
+    const dbConnected = mongoose.connection.readyState === 1;
+
+    res.json({
+      status: "ok",
+      service: "opencollab-api",
+      timestamp: new Date().toISOString(),
+      environment: env.NODE_ENV,
+      checks: {
+        database: dbConnected ? "connected" : "disconnected",
+        githubSystemToken: env.GITHUB_SYSTEM_TOKEN ? "configured" : "missing",
+        mlServiceUrl: env.ML_SERVICE_URL ? "configured" : "missing"
+      }
+    });
   });
 
   app.use("/auth", authRoutes);
@@ -96,6 +108,7 @@ export function createApp() {
   app.use("/api/admin", adminRequestsRoutes);
   app.use("/api/ml", mlRoutes);
   app.use("/api/reports", reportsRoutes);
+  app.use("/api", docsRoutes);
 
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.statusCode || err.status || 500;

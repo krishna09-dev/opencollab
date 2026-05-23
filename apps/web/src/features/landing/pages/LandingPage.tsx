@@ -3,7 +3,7 @@ import { Link as RouterLink } from "react-router-dom";
 
 import MSym from "../../resources/components/MSym";
 
-const MODERATOR_PREVIEW_IMAGE = "https://www.figma.com/api/mcp/asset/05aebb38-32ba-45dc-bb47-ec3354b1efe9";
+const MODERATOR_PREVIEW_IMAGE = "/Container.png";
 
 const PATHWAY_CARDS = [
   {

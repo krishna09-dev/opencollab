@@ -65,5 +65,6 @@ const UserSchema = new Schema<IUser>(
 );
 
 UserSchema.plugin(cleanupOptionalFieldsPlugin);
+UserSchema.index({ login: 1 });
 
 export const User = mongoose.model<IUser>("User", UserSchema);

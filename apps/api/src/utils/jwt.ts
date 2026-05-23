@@ -1,4 +1,5 @@
 import jwt, { Secret, SignOptions } from "jsonwebtoken";
+import { env } from "../config/env";
 
 const WEAK_JWT_SECRETS = new Set([
   "dev_secret",
@@ -7,7 +8,7 @@ const WEAK_JWT_SECRETS = new Set([
 ]);
 
 function getJwtSecret(): Secret {
-  const jwtSecret = (process.env.JWT_SECRET || "").trim();
+  const jwtSecret = (env.JWT_SECRET || "").trim();
   if (!jwtSecret || WEAK_JWT_SECRETS.has(jwtSecret)) {
     throw new Error(
       "JWT_SECRET is missing or weak. Generate a strong secret using: openssl rand -base64 48"
@@ -17,7 +18,7 @@ function getJwtSecret(): Secret {
 }
 
 function getJwtExpiresIn(): SignOptions["expiresIn"] {
-  return (process.env.JWT_EXPIRES_IN || "604800") as SignOptions["expiresIn"];
+  return env.JWT_EXPIRES_IN as SignOptions["expiresIn"];
 }
 
 interface JwtPayloadInput {

@@ -133,6 +133,8 @@ PrTrackingSchema.plugin(cleanupOptionalFieldsPlugin);
 // Unique constraint: one tracking record per user per repo+PR (either by issue or by PR number)
 PrTrackingSchema.index({ userId: 1, repoFullName: 1, prNumber: 1 }, { unique: true, sparse: true });
 PrTrackingSchema.index({ userId: 1, repoFullName: 1, issueNumber: 1 }, { unique: true, sparse: true });
+PrTrackingSchema.index({ userId: 1, status: 1 });
+PrTrackingSchema.index({ issueId: 1, status: 1 });
 // Index for system sync queries
 PrTrackingSchema.index({ lastSystemSyncAt: 1, status: 1 });
 
